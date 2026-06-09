@@ -15,13 +15,13 @@
             background:#000; color:#fff; font-family:Arial, sans-serif;
             height:100vh; overflow:hidden; display:flex; flex-direction:column;
         }
-        #header, .controls {
-            background:rgba(20,20,20,0.9); z-index: 200; 
-            backdrop-filter: blur(8px);
+        #top-bar {
+            background:rgba(20,20,20,0.95); z-index: 100; 
+            padding:8px 10px;
         }
-        #header { padding:10px; text-align:center; font-size:18px; }
+        #header { text-align:center; font-size:18px; padding:6px; }
         .controls {
-            padding:10px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap;
+            display:flex; gap:8px; justify-content:center; flex-wrap:wrap; padding:8px;
         }
         button {
             padding:12px 20px; font-size:16px; background:#0a0; color:white;
@@ -31,26 +31,28 @@
         button:disabled { background:#444; color:#aaa; }
 
         #canvas-container {
-            flex:1; position:relative; background:#111; overflow:hidden;
+            flex: 1; position:relative; background:#111; overflow:hidden;
         }
         #canvas {
-            position:absolute; top:0; left:0; width:100%; height:100%;
+            width:100%; height:100%; display:block;
             image-rendering: crisp-edges;
         }
         #status {
-            position:absolute; bottom:15px; left:50%; transform:translateX(-50%);
+            position:absolute; bottom:12px; left:50%; transform:translateX(-50%);
             background:rgba(0,0,0,0.8); padding:8px 18px; border-radius:25px;
-            font-size:15px; z-index:210; white-space:nowrap; pointer-events:none;
+            font-size:15px; z-index:110; white-space:nowrap; pointer-events:none;
         }
     </style>
 </head>
 <body>
-    <div id="header">Piano Trackmaker</div>
-    <div class="controls">
-        <button id="btnWebcam">Start Camera</button>
-        <button id="btnMIDI" disabled>Select MIDI</button>
-        <button id="btnCalibrate" disabled>Recalibrate</button>
-        <button id="btnStart" disabled>Start Playback</button>
+    <div id="top-bar">
+        <div id="header">Piano Trackmaker</div>
+        <div class="controls">
+            <button id="btnWebcam">Start Camera</button>
+            <button id="btnMIDI" disabled>Select MIDI</button>
+            <button id="btnCalibrate" disabled>Recalibrate</button>
+            <button id="btnStart" disabled>Start Playback</button>
+        </div>
     </div>
     
     <div id="canvas-container">
