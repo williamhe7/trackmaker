@@ -10,16 +10,17 @@ let canvas, ctx;
 let keypointManager, pianoManager, midiManager;
 let isRunning = false;
 let started = false;
+let isCalibrated = false;
 
 async function initONNX() {
     try {
         session = await ort.InferenceSession.create('best_v3.onnx', {
             executionProviders: ['wasm', 'webgl']
         });
-        updateStatus('✅ Model loaded');
+        updateStatus('✅ Model ready');
     } catch (e) {
         console.error(e);
-        updateStatus('❌ Model load failed');
+        updateStatus('❌ Model failed to load');
     }
 }
 
@@ -34,7 +35,7 @@ export async function initTrackmaker() {
     midiManager = new MidiManager(pianoManager, 180);
 
     setupUI();
-    updateStatus('Ready — tap Start Camera');
+    updateStatus('Tap "Start Camera"');
 }
 
 function updateStatus(msg) {
@@ -48,9 +49,14 @@ function setupUI() {
     document.getElementById('btnStart').onclick = startPlayback;
 }
 
+function enableControlsAfterCalibration() {
+    isCalibrated = true;
+    document.getElementById('btnMIDI').disabled = false;
+    document.getElementById('btnStart').disabled = false;
+}
+
 async function startWebcam() {
     try {
-        // Prefer environment camera on mobile
         stream = await navigator.mediaDevices.getUserMedia({ 
             video: { 
                 facingMode: "environment",
@@ -60,37 +66,46 @@ async function startWebcam() {
         });
         video = document.createElement('video');
         video.srcObject = stream;
-        video.playsInline = true;           // Critical for iOS
+        video.playsInline = true;
         await video.play();
-        
-        // Set canvas to match video aspect
-        canvas.width = video.videoWidth || 1280;
-        canvas.height = video.videoHeight || 720;
-        
+
+        // Set canvas to full window size
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
         isRunning = true;
-        document.getElementById('btnStart').disabled = false;
-        updateStatus('Camera active — Recalibrate when piano visible');
+        document.getElementById('btnCalibrate').disabled = false;
+        updateStatus('Camera active — point at piano and tap Recalibrate');
         loop();
     } catch (e) {
-        updateStatus('Camera access denied');
+        updateStatus('Camera access failed');
         console.error(e);
     }
 }
 
+function resizeCanvas() {
+    if (!canvas) return;
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight - 140; // approx space for header + controls
+}
+
 async function calibrate() {
     if (!video || !session) return;
-    updateStatus('Detecting keys...');
+    updateStatus('Detecting piano keys...');
+    
     const kps = await keypointManager.getKeypoints(video, session);
     if (kps?.length >= 2) {
         keypointManager.computeHomography(kps);
         pianoManager.initKeys();
-        updateStatus(`Calibrated with ${kps.length} groups`);
+        enableControlsAfterCalibration();
+        updateStatus(`✅ Calibrated with ${kps.length} key groups`);
     } else {
-        updateStatus('Not enough keys detected — improve lighting');
+        updateStatus('⚠️ Not enough keys. Try better angle/lighting.');
     }
 }
 
 function selectMIDI() {
+    if (!isCalibrated) return;
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.mid,.midi';
@@ -104,25 +119,43 @@ function selectMIDI() {
 }
 
 function startPlayback() {
+    if (!isCalibrated) return;
     started = true;
     midiManager.startTime = performance.now() / 1000;
-    updateStatus('🎵 Playing');
+    updateStatus('🎵 Playback started');
 }
 
 function loop() {
-    if (!isRunning) return;
+    if (!isRunning || !video) return;
 
-    if (video) {
-        // Draw video full area (no skew)
-        ctx.save();
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        
-        if (started) {
-            const currentTime = performance.now() / 1000;
-            midiManager.drawVisualization(ctx, canvas.height, currentTime - midiManager.startTime);
-        }
-        ctx.restore();
+    // === FULL SCREEN WITH ASPECT RATIO PRESERVED ===
+    const videoRatio = video.videoWidth / video.videoHeight;
+    const canvasRatio = canvas.width / canvas.height;
+
+    let drawWidth = canvas.width;
+    let drawHeight = canvas.height;
+    let offsetX = 0;
+    let offsetY = 0;
+
+    if (canvasRatio > videoRatio) {
+        // Pillarbox (vertical bars)
+        drawWidth = canvas.height * videoRatio;
+        offsetX = (canvas.width - drawWidth) / 2;
+    } else {
+        // Letterbox (horizontal bars)
+        drawHeight = canvas.width / videoRatio;
+        offsetY = (canvas.height - drawHeight) / 2;
     }
+
+    ctx.save();
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(video, offsetX, offsetY, drawWidth, drawHeight);
+
+    if (started && midiManager.notes.length > 0) {
+        const currentTime = performance.now() / 1000;
+        midiManager.drawVisualization(ctx, canvas.height, currentTime - midiManager.startTime);
+    }
+    ctx.restore();
 
     requestAnimationFrame(loop);
 }
