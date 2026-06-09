@@ -47,6 +47,7 @@ function setupUI() {
     document.getElementById('btnMIDI').onclick = selectMIDI;
     document.getElementById('btnCalibrate').onclick = calibrate;
     document.getElementById('btnStart').onclick = startPlayback;
+    document.getElementById('fullscreen-btn').onclick = toggleFullscreen;
 }
 
 function enableAfterCalibration() {
@@ -59,7 +60,7 @@ async function startWebcam() {
     try {
         stream = await navigator.mediaDevices.getUserMedia({ 
             video: { 
-                facingMode: "user",           // ← Changed to FRONT camera for mobile
+                facingMode: "user",        // SELFIE CAMERA as requested
                 width: { ideal: 1280 },
                 height: { ideal: 720 }
             } 
@@ -70,95 +71,12 @@ async function startWebcam() {
         video.muted = true;
         await video.play();
 
-        // Make canvas fill the remaining space
         resizeCanvas();
         window.addEventListener('resize', resizeCanvas);
 
         isRunning = true;
         document.getElementById('btnCalibrate').disabled = false;
-        updateStatus('Camera active (front) — Point at piano and tap Recalibrate');
+        updateStatus('Selfie camera active — Point at piano and Recalibrate');
         loop();
     } catch (e) {
-        updateStatus('Camera failed: ' + e.message);
-        console.error(e);
-    }
-}
-
-function resizeCanvas() {
-    if (!canvas || !video) return;
-    canvas.width = window.innerWidth;
-    // Use almost full remaining height
-    canvas.height = window.innerHeight - document.getElementById('top-bar').offsetHeight - 20;
-}
-
-async function calibrate() {
-    if (!video || !session) return;
-    updateStatus('Detecting keys...');
-    
-    const kps = await keypointManager.getKeypoints(video, session);
-    if (kps?.length >= 2) {
-        keypointManager.computeHomography(kps);
-        pianoManager.initKeys();
-        enableAfterCalibration();
-        updateStatus(`✅ Calibrated (${kps.length} groups)`);
-    } else {
-        updateStatus('⚠️ Not enough keys. Better lighting/angle needed.');
-    }
-}
-
-function selectMIDI() {
-    if (!isCalibrated) return;
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.mid,.midi';
-    input.onchange = async e => {
-        if (e.target.files[0]) {
-            await midiManager.loadMIDI(e.target.files[0]);
-            updateStatus('MIDI loaded');
-        }
-    };
-    input.click();
-}
-
-function startPlayback() {
-    if (!isCalibrated) return;
-    started = true;
-    midiManager.startTime = performance.now() / 1000;
-    updateStatus('🎵 Playback started');
-}
-
-function loop() {
-    if (!isRunning || !video) {
-        requestAnimationFrame(loop);
-        return;
-    }
-
-    ctx.save();
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
-    const vW = video.videoWidth;
-    const vH = video.videoHeight;
-    if (vW && vH) {
-        const ratio = vW / vH;
-        let drawW = canvas.width;
-        let drawH = drawW / ratio;
-        let offsetY = (canvas.height - drawH) / 2;
-
-        if (drawH > canvas.height) {
-            drawH = canvas.height;
-            drawW = drawH * ratio;
-        }
-
-        ctx.drawImage(video, (canvas.width - drawW)/2, offsetY, drawW, drawH);
-    }
-
-    if (started && midiManager.notes.length > 0) {
-        const currentTime = performance.now() / 1000;
-        midiManager.drawVisualization(ctx, canvas.height, currentTime - midiManager.startTime);
-    }
-    ctx.restore();
-
-    requestAnimationFrame(loop);
-}
-
-window.onload = initTrackmaker;
+        updateStatus('Camera failed:
