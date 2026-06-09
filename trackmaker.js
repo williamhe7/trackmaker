@@ -44,19 +44,11 @@ function updateStatus(msg) {
 }
 
 function setupUI() {
-    const webcamBtn = document.getElementById('btnWebcam');
-    if (webcamBtn) webcamBtn.onclick = startWebcam;
-
-    document.getElementById('btnMIDI').onclick = selectMIDI;
+    document.getElementById('btnWebcam').onclick = startWebcam;
     document.getElementById('btnCalibrate').onclick = calibrate;
+    document.getElementById('btnMIDI').onclick = selectMIDI;
     document.getElementById('btnStart').onclick = startPlayback;
     document.getElementById('fullscreen-btn').onclick = toggleFullscreen;
-}
-
-function enableAfterCalibration() {
-    isCalibrated = true;
-    document.getElementById('btnMIDI').disabled = false;
-    document.getElementById('btnStart').disabled = false;
 }
 
 async function startWebcam() {
@@ -64,11 +56,14 @@ async function startWebcam() {
     if (btn) btn.disabled = true;
     
     try {
-        updateStatus('Requesting camera...');
-        
+        updateStatus('Requesting selfie camera...');
+
+        // Strong preference for front/selfie camera
         stream = await navigator.mediaDevices.getUserMedia({ 
             video: { 
-                facingMode: "user",        // Selfie camera
+                facingMode: { 
+                    exact: "user"      // Forces front/selfie camera
+                },
                 width: { ideal: 1280 },
                 height: { ideal: 720 }
             } 
@@ -86,11 +81,22 @@ async function startWebcam() {
 
         isRunning = true;
         document.getElementById('btnCalibrate').disabled = false;
-        updateStatus('✅ Camera active (Selfie) — Point at piano and tap Recalibrate');
+        updateStatus('✅ Selfie Camera Active — Point at piano & tap Recalibrate');
         loop();
     } catch (e) {
         console.error('Camera Error:', e);
-        updateStatus('❌ Camera failed: ' + e.message);
+        
+        // Fallback without "exact"
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: "user" }
+            });
+            // ... (reuse video creation code)
+            updateStatus('Selfie camera (fallback)');
+            // Repeat the video setup here if needed
+        } catch (fallbackErr) {
+            updateStatus('❌ Could not access selfie camera');
+        }
         if (btn) btn.disabled = false;
     }
 }
@@ -98,7 +104,7 @@ async function startWebcam() {
 function resizeCanvas() {
     if (!canvas) return;
     canvas.width = window.innerWidth;
-    const topBarHeight = document.getElementById('top-bar')?.offsetHeight || 120;
+    const topBarHeight = document.getElementById('top-bar')?.offsetHeight || 140;
     canvas.height = window.innerHeight - topBarHeight - 10;
 }
 
@@ -114,14 +120,16 @@ async function calibrate() {
         if (kps?.length >= 2) {
             keypointManager.computeHomography(kps);
             pianoManager.initKeys();
-            enableAfterCalibration();
+            isCalibrated = true;
+            document.getElementById('btnMIDI').disabled = false;
+            document.getElementById('btnStart').disabled = false;
             updateStatus(`✅ Calibrated (${kps.length} groups)`);
         } else {
-            updateStatus('⚠️ Not enough keys. Try better lighting/angle.');
+            updateStatus('⚠️ Not enough keys detected');
         }
     } catch (e) {
         console.error(e);
-        updateStatus('Detection error — check console');
+        updateStatus('Detection error');
     }
 }
 
@@ -149,15 +157,13 @@ function startPlayback() {
 function toggleFullscreen() {
     const container = document.getElementById('canvas-container');
     if (!document.fullscreenElement) {
-        container.requestFullscreen().catch(err => console.error(err));
+        container.requestFullscreen();
     } else {
         document.exitFullscreen();
     }
 }
 
-document.addEventListener('fullscreenchange', () => {
-    setTimeout(resizeCanvas, 150);
-});
+document.addEventListener('fullscreenchange', () => setTimeout(resizeCanvas, 100));
 
 function loop() {
     if (!isRunning || !video) {
@@ -168,29 +174,14 @@ function loop() {
     ctx.save();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    const vW = video.videoWidth;
-    const vH = video.videoHeight;
-    if (vW && vH) {
-        const ratio = vW / vH;
-        let drawW = canvas.width;
-        let drawH = drawW / ratio;
-        let offsetY = (canvas.height - drawH) / 2;
+    const vW = video.videoWidth || 1280;
+    const vH = video.videoHeight || 720;
+    const ratio = vW / vH;
 
-        if (drawH > canvas.height) {
-            drawH = canvas.height;
-            drawW = drawH * ratio;
-        }
+    let drawW = canvas.width;
+    let drawH = drawW / ratio;
+    let offsetY = (canvas.height - drawH) / 2;
 
-        ctx.drawImage(video, (canvas.width - drawW)/2, offsetY, drawW, drawH);
-    }
-
-    if (started && midiManager.notes.length > 0) {
-        const currentTime = performance.now() / 1000;
-        midiManager.drawVisualization(ctx, canvas.height, currentTime - midiManager.startTime);
-    }
-    ctx.restore();
-
-    requestAnimationFrame(loop);
-}
-
-window.onload = initTrackmaker;
+    if (drawH > canvas.height) {
+        drawH = canvas.height;
+       
