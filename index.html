@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Piano Trackmaker</title>
+    <script src="https://docs.opencv.org/4.10.0/opencv.js"></script>
+    <script src="https://colxi.info/midi-parser-js/src/main.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/ort.min.js"></script>
+    
+    <style>
+        body { margin:0; padding:20px; background:#111; color:#fff; font-family:Arial, sans-serif; text-align:center; }
+        canvas { border:3px solid #444; background:#000; max-width:100%; margin:10px auto; display:block; }
+        .controls { margin:15px; display:flex; gap:12px; justify-content:center; flex-wrap:wrap; }
+        button { padding:12px 24px; font-size:16px; background:#0a0; color:white; border:none; border-radius:8px; cursor:pointer; }
+        button:hover { background:#0c0; }
+        button:disabled { background:#555; cursor:not-allowed; }
+        #status { margin:15px; color:#0f0; min-height:24px; }
+    </style>
+</head>
+<body>
+    <h1>Piano Trackmaker</h1>
+    <div class="controls">
+        <button id="btnWebcam">Start Webcam</button>
+        <button id="btnMIDI">Select MIDI</button>
+        <button id="btnCalibrate">Recalibrate Homography</button>
+        <button id="btnStart" disabled>Start Playback</button>
+    </div>
+    <canvas id="canvas" width="1280" height="720"></canvas>
+    <div id="status">Loading libraries...</div>
+
+    <script type="module">
+        import './keypointManager.js';
+        import './pianoManager.js';
+        import './midiManager.js';
+        import './trackmaker.js';
+
+        // Global instances will be created in trackmaker.js
+        window.onload = () => {
+            console.log('Main HTML loaded. Modules imported.');
+        };
+    </script>
+</body>
+</html>
