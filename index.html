@@ -4,11 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Piano Trackmaker</title>
-    
+   
     <script src="https://docs.opencv.org/4.10.0/opencv.js"></script>
     <script src="https://colxi.info/midi-parser-js/src/main.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/ort.min.js"></script>
-    
+   
     <style>
         * { margin:0; padding:0; box-sizing:border-box; }
         body {
@@ -16,7 +16,7 @@
             height:100vh; overflow:hidden; display:flex; flex-direction:column;
         }
         #top-bar {
-            background:rgba(20,20,20,0.95); z-index: 100; 
+            background:rgba(20,20,20,0.95); z-index: 200;
             padding:8px 10px;
         }
         #header { text-align:center; font-size:18px; padding:6px; }
@@ -40,7 +40,11 @@
         #status {
             position:absolute; bottom:12px; left:50%; transform:translateX(-50%);
             background:rgba(0,0,0,0.8); padding:8px 18px; border-radius:25px;
-            font-size:15px; z-index:110; white-space:nowrap; pointer-events:none;
+            font-size:15px; z-index:210; white-space:nowrap; pointer-events:none;
+        }
+        #fullscreen-btn {
+            position:absolute; top:12px; right:12px; z-index:220;
+            padding:8px 14px; font-size:14px; background:rgba(0,0,0,0.7);
         }
     </style>
 </head>
@@ -50,21 +54,3 @@
         <div class="controls">
             <button id="btnWebcam">Start Camera</button>
             <button id="btnMIDI" disabled>Select MIDI</button>
-            <button id="btnCalibrate" disabled>Recalibrate</button>
-            <button id="btnStart" disabled>Start Playback</button>
-        </div>
-    </div>
-    
-    <div id="canvas-container">
-        <canvas id="canvas"></canvas>
-        <div id="status">Loading...</div>
-    </div>
-
-    <script type="module">
-        import './keypointManager.js';
-        import './pianoManager.js';
-        import './midiManager.js';
-        import './trackmaker.js';
-    </script>
-</body>
-</html>
