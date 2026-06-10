@@ -12,7 +12,7 @@ let isRunning = false;
 let started = false;
 let isCalibrated = false;
 
-const MODEL_URL = 'best_v3.onnx';
+const MODEL_URL = 'https://williamhe7.github.io/trackmaker/best_v3.onnx';
 
 async function initONNX() {
     updateStatus('Loading AI model... (may take 20-40s on mobile)');
