@@ -19,6 +19,12 @@ export class KeypointManager {
 
         this.scaled_width = 800;
         this.scaled_height = 300;
+
+        this.frameCanvas = document.createElement("canvas");
+        this.frameCtx = this.frameCanvas.getContext("2d");
+        this.srcMat = null;this.frameCanvas = document.createElement("canvas");
+        this.frameCtx = this.frameCanvas.getContext("2d");
+        this.srcMat = null;
     }
 
     async get_kpps(videoElement, session) {
@@ -141,117 +147,126 @@ export class KeypointManager {
     // FIXED + MOBILE OPTIMIZED
     // ================================
     transformImage(videoElement) {
-
+    
         if (!videoElement || this.homography.length === 0) return null;
-
-        const frameCanvas = document.createElement("canvas");
-        frameCanvas.width = videoElement.videoWidth;
-        frameCanvas.height = videoElement.videoHeight;
-
-        const ctx = frameCanvas.getContext("2d");
-        ctx.drawImage(videoElement, 0, 0);
-
-        const srcMat = cv.imread(frameCanvas);
-
-        let outputParts = [];
-
-        try {
-            const warpSize = new cv.Size(
-                Math.floor(srcMat.cols * 1.2),
-                Math.floor(srcMat.rows * 1.2)
+    
+        // =========================
+        // 1. Reuse canvas (NO ALLOCATION)
+        // =========================
+        this.frameCtx.drawImage(videoElement, 0, 0);
+    
+        // =========================
+        // 2. Reuse srcMat if possible
+        // =========================
+        if (!this.srcMat) {
+            this.srcMat = cv.imread(this.frameCanvas);
+        } else {
+            this.srcMat.data.set(
+                cv.imread(this.frameCanvas).data
             );
-
-            for (let i = 0; i < this.homography.length; i++) {
-
-                const warped = new cv.Mat();
-                cv.warpPerspective(srcMat, warped, this.homography[i], warpSize);
-
-                const pts = new cv.Mat();
-                cv.perspectiveTransform(this.source[i], pts, this.homography[i]);
-
-                const data = pts.data32F;
-
-                let minX = Infinity;
-                let maxX = -Infinity;
-
-                for (let j = 0; j < data.length; j += 2) {
-                    minX = Math.min(minX, data[j]);
-                    maxX = Math.max(maxX, data[j]);
-                }
-
-                const x0 = Math.max(0, Math.floor(minX));
-                const x1 = Math.min(warped.cols, Math.ceil(maxX));
-
-                pts.delete();
-
-                if (x1 <= x0 + 5) {
-                    warped.delete();
-                    continue;
-                }
-
-                const roi = warped.roi(new cv.Rect(x0, 0, x1 - x0, warped.rows));
-
-                const resized = new cv.Mat();
-                cv.resize(roi, resized, new cv.Size(roi.cols, this.h));
-
-                roi.delete();
-                warped.delete();
-
-                outputParts.push(resized);
-            }
-
-            if (outputParts.length === 0) {
-                srcMat.delete();
-                return null;
-            }
-
-            // SAFE CONCAT (manual, no MatVector bugs)
-            let combined = outputParts[0];
-
-            for (let i = 1; i < outputParts.length; i++) {
-                const next = outputParts[i];
-
-                const dst = new cv.Mat();
-                cv.hconcat(combined, next, dst);
-
-                combined.delete();
-                next.delete();
-
-                combined = dst;
-            }
-
-            const finalH = Math.max(1, Math.round(combined.cols / this.scale_factor));
-
-            const resized = new cv.Mat();
-            cv.resize(combined, resized, new cv.Size(combined.cols, finalH));
-
-            const rotated = new cv.Mat();
-            cv.rotate(resized, rotated, cv.ROTATE_180);
-
-            const canvas = document.createElement("canvas");
-            canvas.width = rotated.cols;
-            canvas.height = rotated.rows;
-
-            cv.imshow(canvas, rotated);
-
-            // CLEANUP
-            srcMat.delete();
-            combined.delete();
-            resized.delete();
-            rotated.delete();
-
-            return canvas;
-
-        } catch (e) {
-            console.error("transformImage failed:", e);
-
-            try { srcMat.delete(); } catch {}
-
-            for (const p of outputParts) {
-                try { p.delete(); } catch {}
-            }
-
-            return null;
         }
+    
+        const src = this.srcMat;
+    
+        let parts = [];
+    
+        const warpSize = new cv.Size(
+            src.cols * 1.1,
+            src.rows * 1.1
+        );
+    
+        // =========================
+        // 3. Main loop (minimal allocations)
+        // =========================
+        for (let i = 0; i < this.homography.length; i++) {
+    
+            const H = this.homography[i];
+    
+            const warped = new cv.Mat();
+            cv.warpPerspective(src, warped, H, warpSize);
+    
+            const pts = new cv.Mat();
+            cv.perspectiveTransform(this.source[i], pts, H);
+    
+            const data = pts.data32F;
+    
+            let minX = 1e9;
+            let maxX = -1e9;
+    
+            for (let j = 0; j < data.length; j += 2) {
+                const x = data[j];
+                if (x < minX) minX = x;
+                if (x > maxX) maxX = x;
+            }
+    
+            pts.delete();
+    
+            const x0 = Math.max(0, minX | 0);
+            const x1 = Math.min(warped.cols, maxX | 0);
+    
+            if (x1 - x0 < 10) {
+                warped.delete();
+                continue;
+            }
+    
+            const roi = warped.roi(new cv.Rect(x0, 0, x1 - x0, warped.rows));
+    
+            const resized = new cv.Mat();
+            cv.resize(roi, resized, new cv.Size(roi.cols, this.h));
+    
+            roi.delete();
+            warped.delete();
+    
+            parts.push(resized);
+    
+            // =========================
+            // FPS CONTROL POINT (IMPORTANT)
+            // =========================
+            if (parts.length > 6) break; // hard cap for mobile FPS
+        }
+    
+        if (parts.length === 0) return null;
+    
+        // =========================
+        // 4. Safe concat (no MatVector)
+        // =========================
+        let combined = parts[0];
+    
+        for (let i = 1; i < parts.length; i++) {
+            const dst = new cv.Mat();
+            cv.hconcat(combined, parts[i], dst);
+    
+            combined.delete();
+            parts[i].delete();
+    
+            combined = dst;
+        }
+    
+        // =========================
+        // 5. Final lightweight resize
+        // =========================
+        const finalH = Math.max(1, (combined.cols / this.scale_factor) | 0);
+    
+        const resized = new cv.Mat();
+        cv.resize(combined, resized, new cv.Size(combined.cols, finalH));
+    
+        const rotated = new cv.Mat();
+        cv.rotate(resized, rotated, cv.ROTATE_180);
+    
+        const out = document.createElement("canvas");
+        out.width = rotated.cols;
+        out.height = rotated.rows;
+    
+        cv.imshow(out, rotated);
+    
+        // =========================
+        // 6. Cleanup
+        // =========================
+        src.delete();          // IMPORTANT (avoid leak)
+        combined.delete();
+        resized.delete();
+        rotated.delete();
+    
+        return out;
     }
 }
