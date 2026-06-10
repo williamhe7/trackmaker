@@ -329,9 +329,7 @@ export class KeypointManager {
                 return null;
             }
     
-            // -------------------------
-            // SAFE CONCAT (NO DOUBLE FREE)
-            // -------------------------
+            // ---------------- SAFE CONCAT ----------------
             const matVector = new cv.MatVector();
     
             for (const piece of pieces) {
@@ -343,9 +341,7 @@ export class KeypointManager {
     
             matVector.delete();
     
-            // IMPORTANT:
-            // DO NOT delete pieces here (they are still used by combined internally in wasm binding)
-            // Let OpenCV ownership handle it OR avoid manual deletion
+            // DO NOT TOUCH pieces YET
     
             const finalHeight = Math.max(
                 1,
@@ -353,7 +349,6 @@ export class KeypointManager {
             );
     
             const resized = new cv.Mat();
-    
             cv.resize(
                 combined,
                 resized,
@@ -372,14 +367,15 @@ export class KeypointManager {
     
             cv.imshow(outputCanvas, rotated);
     
-            // cleanup (SAFE ORDER)
-            srcMat.delete();
-            combined.delete();
-            resized.delete();
+            // ================= SAFE CLEANUP ORDER =================
+    
             rotated.delete();
+            resized.delete();
+            combined.delete();
+            srcMat.delete();
     
             for (const p of pieces) {
-                p.delete();
+                try { p.delete(); } catch {}
             }
     
             return outputCanvas;
@@ -388,9 +384,8 @@ export class KeypointManager {
     
             console.error("transformImage failed", err);
     
-            srcMat.delete();
+            try { srcMat.delete(); } catch {}
     
-            // safe cleanup
             for (const p of pieces) {
                 try { p.delete(); } catch {}
             }
