@@ -81,8 +81,8 @@ async function startWebcam() {
         stream = await navigator.mediaDevices.getUserMedia({ 
             video: { 
                 facingMode: { exact: "user" }, 
-                width: { ideal: 1600 },
-                height: { ideal: 1200 }
+                width: { ideal: 1280 },
+                height: { ideal: 720 }
             } 
         });
         console.log("✅ Using front/selfie camera");
@@ -114,9 +114,6 @@ async function startWebcam() {
         video.srcObject = stream;
         video.playsInline = true;
         video.muted = true;
-
-        keypointManager.frameCanvas.width = video.videoWidth;
-        keypointManager.frameCanvas.height = video.videoHeight;
         
         await video.play();
 
@@ -140,9 +137,10 @@ async function startWebcam() {
 function resizeCanvas() {
     if (!canvas) return;
     canvas.width = window.innerWidth;
-    const topBar = document.getElementById('top-bar');
-    const topHeight = topBar ? topBar.offsetHeight : 140;
-    canvas.height = window.innerHeight - topHeight - 10;
+    canvas.height = window.innerHeight;
+
+    keypointManager.frameCanvas.width = canvas.width;
+    keypointManager.frameCanvas.height = canvas.height;
 }
 
 async function calibrate() {
