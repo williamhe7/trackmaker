@@ -252,55 +252,33 @@ export class KeypointManager {
             return null;
         }
     
-        const frameCanvas =
-            document.createElement("canvas");
+        const frameCanvas = document.createElement("canvas");
+        frameCanvas.width = videoElement.videoWidth;
+        frameCanvas.height = videoElement.videoHeight;
     
-        frameCanvas.width =
-            videoElement.videoWidth;
+        const frameCtx = frameCanvas.getContext("2d");
+        frameCtx.drawImage(videoElement, 0, 0);
     
-        frameCanvas.height =
-            videoElement.videoHeight;
-    
-        const frameCtx =
-            frameCanvas.getContext("2d");
-    
-        frameCtx.drawImage(
-            videoElement,
-            0,
-            0
-        );
-    
-        const srcMat =
-            cv.imread(frameCanvas);
+        const srcMat = cv.imread(frameCanvas);
     
         const pieces = [];
     
         try {
     
-            for (
-                let i = 0;
-                i < this.homography.length;
-                i++
-            ) {
+            for (let i = 0; i < this.homography.length; i++) {
     
-                const H =
-                    this.homography[i];
+                const H = this.homography[i];
     
-                const warped =
-                    new cv.Mat();
+                const warped = new cv.Mat();
     
                 cv.warpPerspective(
                     srcMat,
                     warped,
                     H,
-                    new cv.Size(
-                        srcMat.cols * 2,
-                        srcMat.rows * 2
-                    )
+                    new cv.Size(srcMat.cols * 2, srcMat.rows * 2)
                 );
     
-                const transformed =
-                    new cv.Mat();
+                const transformed = new cv.Mat();
     
                 cv.perspectiveTransform(
                     this.source[i],
@@ -308,76 +286,35 @@ export class KeypointManager {
                     H
                 );
     
-                const pts =
-                    transformed.data32F;
+                const pts = transformed.data32F;
     
                 let minX = Infinity;
                 let maxX = -Infinity;
     
-                for (
-                    let p = 0;
-                    p < pts.length;
-                    p += 2
-                ) {
-                    minX =
-                        Math.min(
-                            minX,
-                            pts[p]
-                        );
-    
-                    maxX =
-                        Math.max(
-                            maxX,
-                            pts[p]
-                        );
+                for (let p = 0; p < pts.length; p += 2) {
+                    minX = Math.min(minX, pts[p]);
+                    maxX = Math.max(maxX, pts[p]);
                 }
     
-                const x0 =
-                    Math.max(
-                        0,
-                        Math.floor(minX)
-                    );
-    
-                const x1 =
-                    Math.min(
-                        warped.cols,
-                        Math.ceil(maxX)
-                    );
+                const x0 = Math.max(0, Math.floor(minX));
+                const x1 = Math.min(warped.cols, Math.ceil(maxX));
     
                 if (x1 <= x0 + 5) {
-    
-                    console.warn(
-                        "Skipping bad ROI",
-                        x0,
-                        x1
-                    );
-    
                     warped.delete();
                     transformed.delete();
-    
                     continue;
                 }
     
-                const roi =
-                    warped.roi(
-                        new cv.Rect(
-                            x0,
-                            0,
-                            x1 - x0,
-                            warped.rows
-                        )
-                    );
+                const roi = warped.roi(
+                    new cv.Rect(x0, 0, x1 - x0, warped.rows)
+                );
     
-                const resized =
-                    new cv.Mat();
+                const resized = new cv.Mat();
     
                 cv.resize(
                     roi,
                     resized,
-                    new cv.Size(
-                        roi.cols,
-                        this.h
-                    )
+                    new cv.Size(roi.cols, this.h)
                 );
     
                 pieces.push(resized);
@@ -392,91 +329,71 @@ export class KeypointManager {
                 return null;
             }
     
+            // -------------------------
+            // SAFE CONCAT (NO DOUBLE FREE)
+            // -------------------------
             const matVector = new cv.MatVector();
-
+    
             for (const piece of pieces) {
                 matVector.push_back(piece);
             }
-            
+    
             const combined = new cv.Mat();
-            
             cv.hconcat(matVector, combined);
-            
+    
             matVector.delete();
-            
-            for (const piece of pieces) {
-                piece.delete();
-            }
-            combined.delete();
     
-            const finalHeight =
-                Math.max(
-                    1,
-                    Math.round(
-                        combined.cols /
-                        this.scale_factor
-                    )
-                );
+            // IMPORTANT:
+            // DO NOT delete pieces here (they are still used by combined internally in wasm binding)
+            // Let OpenCV ownership handle it OR avoid manual deletion
     
-            const resized =
-                new cv.Mat();
+            const finalHeight = Math.max(
+                1,
+                Math.round(combined.cols / this.scale_factor)
+            );
+    
+            const resized = new cv.Mat();
     
             cv.resize(
                 combined,
                 resized,
-                new cv.Size(
-                    combined.cols,
-                    finalHeight
-                ),
+                new cv.Size(combined.cols, finalHeight),
                 0,
                 0,
                 cv.INTER_CUBIC
             );
     
-            const rotated =
-                new cv.Mat();
+            const rotated = new cv.Mat();
+            cv.rotate(resized, rotated, cv.ROTATE_180);
     
-            cv.rotate(
-                resized,
-                rotated,
-                cv.ROTATE_180
-            );
+            const outputCanvas = document.createElement("canvas");
+            outputCanvas.width = rotated.cols;
+            outputCanvas.height = rotated.rows;
     
-            const outputCanvas =
-                document.createElement("canvas");
+            cv.imshow(outputCanvas, rotated);
     
-            outputCanvas.width =
-                rotated.cols;
-    
-            outputCanvas.height =
-                rotated.rows;
-    
-            cv.imshow(
-                outputCanvas,
-                rotated
-            );
-    
-            console.log(
-                "Homography image:",
-                rotated.cols,
-                rotated.rows
-            );
-    
+            // cleanup (SAFE ORDER)
             srcMat.delete();
             combined.delete();
             resized.delete();
             rotated.delete();
     
+            for (const p of pieces) {
+                p.delete();
+            }
+    
             return outputCanvas;
     
         } catch (err) {
     
-            console.error(
-                "transformImage failed",
-                err
-            );
+            console.error("transformImage failed", err);
     
             srcMat.delete();
+    
+            // safe cleanup
+            for (const p of pieces) {
+                try { p.delete(); } catch {}
+            }
     
             return null;
         }
