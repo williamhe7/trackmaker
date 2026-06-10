@@ -68,15 +68,40 @@ async function startWebcam() {
     
     try {
         updateStatus('Requesting Selfie Camera...');
-
+        
+        // First attempt: Force front camera (for mobile)
         stream = await navigator.mediaDevices.getUserMedia({ 
             video: { 
-                facingMode: { exact: "user" },
+                facingMode: { exact: "user" }, 
                 width: { ideal: 1280 },
                 height: { ideal: 720 }
             } 
         });
+        console.log("✅ Using front/selfie camera");
+        
+    } catch (e) {
+        console.warn("Front camera not available, trying any camera...", e);
+        updateStatus('Trying regular camera...');
+        
+        try {
+            // Fallback: Any available camera (works on desktop + some mobile cases)
+            stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { 
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                } 
+            });
+            console.log("✅ Using fallback camera");
+        } catch (fallbackError) {
+            console.error("All camera attempts failed:", fallbackError);
+            updateStatus('❌ Camera access denied or unavailable');
+            if (btn) btn.disabled = false;
+            return;
+        }
+    }
 
+    // Continue with video setup
+    try {
         video = document.createElement('video');
         video.srcObject = stream;
         video.playsInline = true;
@@ -85,14 +110,15 @@ async function startWebcam() {
 
         resizeCanvas();
         window.addEventListener('resize', resizeCanvas);
+        window.addEventListener('orientationchange', () => setTimeout(resizeCanvas, 300));
 
         isRunning = true;
         document.getElementById('btnCalibrate').disabled = false;
-        updateStatus('✅ Selfie Camera Active — Point piano at camera and tap Recalibrate');
+        updateStatus('✅ Camera Active — Tap Recalibrate');
         loop();
-    } catch (e) {
-        console.error('Camera Error:', e);
-        updateStatus('❌ Camera error: ' + e.message);
+    } catch (videoError) {
+        console.error(videoError);
+        updateStatus('❌ Failed to start video stream');
         if (btn) btn.disabled = false;
     }
 }
