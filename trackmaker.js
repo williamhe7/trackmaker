@@ -81,8 +81,8 @@ async function startWebcam() {
         stream = await navigator.mediaDevices.getUserMedia({ 
             video: { 
                 facingMode: { exact: "user" }, 
-                width: { ideal: 1280 },
-                height: { ideal: 720 }
+                width: { ideal: 1600 },
+                height: { ideal: 1200 }
             } 
         });
         console.log("✅ Using front/selfie camera");
@@ -114,6 +114,10 @@ async function startWebcam() {
         video.srcObject = stream;
         video.playsInline = true;
         video.muted = true;
+
+        keypointManager.frameCanvas.width = video.videoWidth;
+        keypointManager.frameCanvas.height = video.videoHeight;
+        
         await video.play();
 
         resizeCanvas();
@@ -200,7 +204,10 @@ function toggleFullscreen() {
 
 document.addEventListener('fullscreenchange', () => setTimeout(resizeCanvas, 100));
 
+let frameCount = 0;
+
 function loop() {
+    frameCount++;
     if (!isRunning || !video) {
         requestAnimationFrame(loop);
         return;
@@ -210,13 +217,8 @@ function loop() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
     let pianoCanvas = null;
-    if (isCalibrated) {
+    if (isCalibrated && frameCount%2==0) {
         pianoCanvas = keypointManager.transformImage(video);
-
-        //log
-        console.log(
-            keypointManager.transformImage(video)
-        );
     }
 
     if (pianoCanvas) {
