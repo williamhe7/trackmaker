@@ -6,247 +6,157 @@ import { MidiManager } from './midiManager.js';
 let session = null;
 let video = null;
 let stream = null;
+
 let canvas, ctx;
+
 let keypointManager, pianoManager, midiManager;
+
 let isRunning = false;
 let started = false;
 let isCalibrated = false;
 
-// ← CHANGE THIS TO YOUR ACTUAL MODEL URL
-//const MODEL_URL = 'best_v3.onnx';   // Use full URL if needed, e.g.:
-const MODEL_URL = 'https://williamhe7.github.io/trackmaker/best_v3.onnx';
+let loopStarted = false;
+let frameCount = 0;
+
+const MODEL_URL = "https://williamhe7.github.io/trackmaker/best_v3.onnx";
 
 async function initONNX() {
-    updateStatus('Loading AI model (~11MB)... This may take 15-40s on mobile');
     try {
         session = await ort.InferenceSession.create(MODEL_URL, {
-            executionProviders: ['wasm'],
-            graphOptimizationLevel: 'basic'
+            executionProviders: ["wasm"],
+            graphOptimizationLevel: "basic"
         });
-        console.log('✅ Model loaded from URL');
-        updateStatus('✅ Model loaded successfully');
+
+        updateStatus("Model loaded");
         return true;
     } catch (e) {
-        console.error('Model load failed:', e);
-        updateStatus('❌ Failed to load model. Check console.');
+        console.error(e);
+        updateStatus("Model failed");
         return false;
     }
 }
 
 export async function initTrackmaker() {
-    canvas = document.getElementById('canvas');
-    ctx = canvas.getContext('2d');
-    
-    const modelLoaded = await initONNX();
-    
+    canvas = document.getElementById("canvas");
+    ctx = canvas.getContext("2d");
+
+    await initONNX();
+
     keypointManager = new KeypointManager();
     pianoManager = new PianoManager(keypointManager);
     midiManager = new MidiManager(pianoManager, 180);
 
     setupUI();
-    if (modelLoaded) {
-        updateStatus('✅ Ready — Tap "Start Camera"');
-    }
-    waitForCV()
+
+    waitForCV();
 }
 
 function waitForCV() {
-    return new Promise(resolve => {
-        if (typeof cv !== 'undefined') resolve();
-        else setTimeout(() => waitForCV().then(resolve), 100);
-    });
+    if (typeof cv !== "undefined") return;
+    setTimeout(waitForCV, 100);
 }
 
 function updateStatus(msg) {
-    const statusEl = document.getElementById('status');
-    if (statusEl) statusEl.textContent = msg;
+    const el = document.getElementById("status");
+    if (el) el.textContent = msg;
 }
 
 function setupUI() {
-    document.getElementById('btnWebcam').onclick = startWebcam;
-    document.getElementById('btnCalibrate').onclick = calibrate;
-    document.getElementById('btnMIDI').onclick = selectMIDI;
-    document.getElementById('btnStart').onclick = startPlayback;
-    document.getElementById('fullscreen-btn').onclick = toggleFullscreen;
+    document.getElementById("btnWebcam").onclick = startWebcam;
+    document.getElementById("btnCalibrate").onclick = calibrate;
+    document.getElementById("btnMIDI").onclick = selectMIDI;
+    document.getElementById("btnStart").onclick = startPlayback;
 }
 
 async function startWebcam() {
-    const btn = document.getElementById('btnWebcam');
-    if (btn) btn.disabled = true;
-    
-    try {
-        updateStatus('Requesting Selfie Camera...');
-        
-        // First attempt: Force front camera (for mobile)
-        stream = await navigator.mediaDevices.getUserMedia({ 
-            video: { 
-                facingMode: { exact: "user" }, 
-                width: { ideal: 1280 },
-                height: { ideal: 720 }
-            } 
-        });
-        console.log("✅ Using front/selfie camera");
-        
-    } catch (e) {
-        console.warn("Front camera not available, trying any camera...", e);
-        updateStatus('Trying regular camera...');
-        
-        try {
-            // Fallback: Any available camera (works on desktop + some mobile cases)
-            stream = await navigator.mediaDevices.getUserMedia({ 
-                video: { 
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 }
-                } 
-            });
-            console.log("✅ Using fallback camera");
-        } catch (fallbackError) {
-            console.error("All camera attempts failed:", fallbackError);
-            updateStatus('❌ Camera access denied or unavailable');
-            if (btn) btn.disabled = false;
-            return;
-        }
-    }
+    stream = await navigator.mediaDevices.getUserMedia({ video: true });
 
-    // Continue with video setup
-    try {
-        video = document.createElement('video');
-        video.srcObject = stream;
-        video.playsInline = true;
-        video.muted = true;
-        
-        await video.play();
+    video = document.createElement("video");
+    video.srcObject = stream;
+    video.playsInline = true;
+    video.muted = true;
 
-        resizeCanvas();
-        window.addEventListener('resize', resizeCanvas);
-        window.addEventListener('orientationchange', () => setTimeout(resizeCanvas, 300));
+    await video.play();
+    await new Promise(r => video.onloadedmetadata = r);
 
-        isRunning = true;
-        document.getElementById('btnCalibrate').disabled = false;
-        updateStatus('✅ Camera Active — Tap Recalibrate');
+    resizeCanvas();
+
+    isRunning = true;
+
+    if (!loopStarted) {
+        loopStarted = true;
         loop();
-    } catch (videoError) {
-        console.error(videoError);
-        updateStatus('❌ Failed to start video stream');
-        if (btn) btn.disabled = false;
     }
 }
 
-// ... [rest of the file remains the same as previous version]
-
 function resizeCanvas() {
-    if (!canvas) return;
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+    const top = document.getElementById("top-bar");
+    const h = top ? top.offsetHeight : 0;
 
-    keypointManager.frameCanvas.width = canvas.width;
-    keypointManager.frameCanvas.height = canvas.height;
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight - h;
 }
 
 async function calibrate() {
-    if (!video || !session) {
-        updateStatus('Camera or model not ready');
-        return;
-    }
-    updateStatus('Detecting piano keys...');
-    
-    try {
-        const kps = await keypointManager.get_kpps(video, session);
-        keypointManager.keys = kps;
-        
-        if (kps && kps.length >= 2) {
-            keypointManager.compute_homography(kps, keypointManager.h);
-            pianoManager.initKeys();
-            isCalibrated = true;
-            document.getElementById('btnMIDI').disabled = false;
-            document.getElementById('btnStart').disabled = false;
-            updateStatus(`✅ Calibrated with ${kps.length} key groups`);
-        } else {
-            updateStatus('⚠️ Not enough keys detected. Try better lighting/angle.');
-        }
-    } catch (e) {
-        console.error(e);
-        updateStatus('Detection failed — check console');
-    }
+    const kps = await keypointManager.get_kpps(video, session);
+
+    if (kps.length < 2) return;
+
+    keypointManager.compute_homography(kps, keypointManager.h);
+    pianoManager.initKeys();
+
+    isCalibrated = true;
 }
 
 function selectMIDI() {
-    if (!isCalibrated) return;
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.mid,.midi';
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".mid,.midi";
+
     input.onchange = async e => {
         if (e.target.files[0]) {
             await midiManager.loadMIDI(e.target.files[0]);
-            updateStatus('MIDI loaded');
         }
     };
+
     input.click();
 }
 
 function startPlayback() {
-    if (!isCalibrated) return;
     started = true;
     midiManager.startTime = performance.now() / 1000;
-    updateStatus('🎵 Playback started');
 }
-
-function toggleFullscreen() {
-    const container = document.getElementById('canvas-container');
-    if (!document.fullscreenElement) {
-        container.requestFullscreen().catch(() => {});
-    } else {
-        document.exitFullscreen();
-    }
-}
-
-document.addEventListener('fullscreenchange', () => setTimeout(resizeCanvas, 100));
-
-let frameCount = 0;
 
 function loop() {
     frameCount++;
-    if (!isRunning || !video) {
+
+    if (!isRunning) {
         requestAnimationFrame(loop);
         return;
     }
 
-    ctx.save();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
+
     let pianoCanvas = null;
-    if (isCalibrated && frameCount%2==0) {
+
+    if (isCalibrated && frameCount % 2 === 0) {
         pianoCanvas = keypointManager.transformImage(video);
     }
 
     if (pianoCanvas) {
-        // Draw transformed piano
-        const drawX = (canvas.width - pianoCanvas.width) / 2;
-        const drawY = canvas.height - pianoCanvas.height - 10;
-        ctx.drawImage(pianoCanvas, drawX, drawY);
+        ctx.drawImage(
+            pianoCanvas,
+            (canvas.width - pianoCanvas.width) / 2,
+            canvas.height - pianoCanvas.height
+        );
     } else {
-        // Fallback: original draw
-        const vW = video.videoWidth || 1280;
-        const vH = video.videoHeight || 720;
-        const ratio = vW / vH;
-
-        let drawW = canvas.width;
-        let drawH = drawW / ratio;
-        let offsetY = (canvas.height - drawH) / 2;
-
-        if (drawH > canvas.height) {
-            drawH = canvas.height;
-            drawW = drawH * ratio;
-        }
-
-        ctx.drawImage(video, (canvas.width - drawW)/2, offsetY, drawW, drawH);
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     }
 
     if (started && midiManager.notes.length > 0) {
-        const currentTime = performance.now() / 1000;
-        midiManager.drawVisualization(ctx, canvas.height, currentTime - midiManager.startTime);
+        const t = performance.now() / 1000;
+        midiManager.drawVisualization(ctx, canvas.height, t - midiManager.startTime);
     }
-    ctx.restore();
 
     requestAnimationFrame(loop);
 }
