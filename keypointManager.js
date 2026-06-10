@@ -12,7 +12,7 @@ export class KeypointManager {
         this.scaled_height = 800;
     }
 
-    async getKeypoints(videoElement, session) {
+async getKeypoints(videoElement, session) {
         if (!session) return [];
 
         const inputSize = 1600;
@@ -33,7 +33,15 @@ export class KeypointManager {
         }
 
         const tensor = new ort.Tensor('float32', data, [1, 3, inputSize, inputSize]);
-        const results = await session.run({ images: tensor });   // or 'input.1' if needed
+        
+        let results;
+        try {
+            results = await session.run({ images: tensor });
+        } catch (e) {
+            console.error("Inference error", e);
+            // Try alternative input name
+            results = await session.run({ "input.1": tensor });
+        }
 
         console.log("Raw ONNX output keys:", Object.keys(results));
         const outputTensor = results.output0 || results.output || Object.values(results)[0];
@@ -43,36 +51,36 @@ export class KeypointManager {
     }
 
     postProcessYOLOPose(rawOutput, imgSize = 1600) {
-        // Typical YOLO Pose output shape without NMS: [1, (5 + nKeypoints*3), nAnchors]
-        // Example: 5 (box+conf+cls) + 6 keypoints * 3 (x,y,conf) = 23 values
-        const numAnchors = 8400; // common for 1600px input
-        const valuesPerAnchor = Math.floor(rawOutput.length / numAnchors); 
-
-        console.log(`Pose output format: ${rawOutput.length} values → ${valuesPerAnchor} per anchor`);
+        console.log(`Total output values: ${rawOutput.length}`);
 
         const detections = [];
         const confThreshold = 0.25;
 
-        for (let i = 0; i < numAnchors; i++) {
-            const offset = i * valuesPerAnchor;
-            const confidence = rawOutput[offset + 4]; // usually objectness/confidence
+        // Many YOLO pose ONNX models output in this format for 1 detection:
+        // [x1,y1,x2,y2,conf,class, kpt1_x, kpt1_y, kpt1_vis, ...]
+        const numValuesPerDetection = 5 + 6 * 3; // bbox(4) + obj(1) + 6 keypoints * 3
+
+        // Try to find number of detections
+        const numDetections = Math.floor(rawOutput.length / numValuesPerDetection);
+
+        console.log(`Assuming ${numDetections} detections with ${numValuesPerDetection} values each`);
+
+        for (let i = 0; i < numDetections; i++) {
+            const offset = i * numValuesPerDetection;
+            const confidence = rawOutput[offset + 4];
 
             if (confidence < confThreshold) continue;
 
-            // Extract keypoints (after bbox + conf + class)
             const kpts = [];
-            const kptStart = 5; // adjust if needed (bbox=4 + obj + cls)
+            const kptStart = 6; // after bbox + obj + class (adjust if needed)
 
-            for (let k = 0; k < 6; k++) {  // assuming 6 keypoints (adjust to your model)
-                const xIdx = kptStart + k * 3;
-                const yIdx = xIdx + 1;
-                const visIdx = yIdx + 1;
+            for (let k = 0; k < 6; k++) {   // ← Change to your actual number of keypoints if different
+                const base = kptStart + k * 3;
+                const x = rawOutput[offset + base] * imgSize;
+                const y = rawOutput[offset + base + 1] * imgSize;
+                const vis = rawOutput[offset + base + 2];
 
-                const x = rawOutput[offset + xIdx] * imgSize;
-                const y = rawOutput[offset + yIdx] * imgSize;
-                const vis = rawOutput[offset + visIdx];
-
-                if (vis > 0.5) {
+                if (vis > 0.5 && x > 0 && y > 0) {
                     kpts.push([x, y]);
                 }
             }
@@ -83,16 +91,8 @@ export class KeypointManager {
         }
 
         const sorted = this.sortByLowestX(detections);
-        console.log(`Found ${sorted.length} keypoint groups`);
+        console.log(`✅ Found ${sorted.length} valid keypoint groups`);
         return sorted;
-    }
-
-    sortByLowestX(kpps) {
-        return kpps.sort((a, b) => {
-            const minA = Math.min(...a.map(p => p[0]));
-            const minB = Math.min(...b.map(p => p[0]));
-            return minA - minB;
-        });
     }
 
     // ... rest of the class (computeHomography, transformImage) stays the same as before
