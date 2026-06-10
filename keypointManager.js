@@ -392,29 +392,22 @@ export class KeypointManager {
                 return null;
             }
     
-            let combined =
-                pieces[0];
-    
-            for (
-                let i = 1;
-                i < pieces.length;
-                i++
-            ) {
-    
-                const tmp =
-                    new cv.Mat();
-    
-                cv.hconcat(
-                    combined,
-                    pieces[i],
-                    tmp
-                );
-    
-                combined.delete();
-                pieces[i].delete();
-    
-                combined = tmp;
+            const matVector = new cv.MatVector();
+
+            for (const piece of pieces) {
+                matVector.push_back(piece);
             }
+            
+            const combined = new cv.Mat();
+            
+            cv.hconcat(matVector, combined);
+            
+            matVector.delete();
+            
+            for (const piece of pieces) {
+                piece.delete();
+            }
+            combined.delete();
     
             const finalHeight =
                 Math.max(
