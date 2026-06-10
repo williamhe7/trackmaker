@@ -21,84 +21,188 @@ export class KeypointManager {
         this.scaled_height = 300;
     }
 
-    // Matches Python naming
     async get_kpps(videoElement, session) {
         if (!session) return [];
-
-        const inputSize = 1600;
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = inputSize;
-        tempCanvas.height = inputSize;
-        const tctx = tempCanvas.getContext('2d', { willReadFrequently: true });
-        tctx.drawImage(videoElement, 0, 0, inputSize, inputSize);
-
-        const imageData = tctx.getImageData(0, 0, inputSize, inputSize);
-        const data = new Float32Array(3 * inputSize * inputSize);
-
-        for (let i = 0; i < inputSize * inputSize; i++) {
-            const idx = i * 4;
-            data[i] = imageData.data[idx] / 255.0;
-            data[i + inputSize * inputSize] = imageData.data[idx + 1] / 255.0;
-            data[i + 2 * inputSize * inputSize] = imageData.data[idx + 2] / 255.0;
+    
+        const INPUT_SIZE = 1600;
+    
+        // Ultralytics LetterBox
+        const ratio = Math.min(
+            INPUT_SIZE / videoElement.videoWidth,
+            INPUT_SIZE / videoElement.videoHeight
+        );
+    
+        const newW = Math.round(videoElement.videoWidth * ratio);
+        const newH = Math.round(videoElement.videoHeight * ratio);
+    
+        const padX = (INPUT_SIZE - newW) / 2;
+        const padY = (INPUT_SIZE - newH) / 2;
+    
+        const canvas = document.createElement("canvas");
+        canvas.width = INPUT_SIZE;
+        canvas.height = INPUT_SIZE;
+    
+        const ctx = canvas.getContext("2d", {
+            willReadFrequently: true
+        });
+    
+        // Ultralytics padding color
+        ctx.fillStyle = "rgb(114,114,114)";
+        ctx.fillRect(0, 0, INPUT_SIZE, INPUT_SIZE);
+    
+        ctx.drawImage(
+            videoElement,
+            padX,
+            padY,
+            newW,
+            newH
+        );
+    
+        const imageData =
+            ctx.getImageData(0, 0, INPUT_SIZE, INPUT_SIZE);
+    
+        const area = INPUT_SIZE * INPUT_SIZE;
+    
+        const inputData =
+            new Float32Array(3 * area);
+    
+        for (let i = 0; i < area; i++) {
+    
+            const p = i * 4;
+    
+            inputData[i] =
+                imageData.data[p] / 255.0;
+    
+            inputData[i + area] =
+                imageData.data[p + 1] / 255.0;
+    
+            inputData[i + area * 2] =
+                imageData.data[p + 2] / 255.0;
         }
-
-        const tensor = new ort.Tensor('float32', data, [1, 3, inputSize, inputSize]);
-        
+    
+        const tensor = new ort.Tensor(
+            "float32",
+            inputData,
+            [1, 3, INPUT_SIZE, INPUT_SIZE]
+        );
+    
         let results;
+    
         try {
-            results = await session.run({ images: tensor });
-        } catch (e) {
-            results = await session.run({ "input.1": tensor });
+            results = await session.run({
+                images: tensor
+            });
+        } catch {
+    
+            const inputName =
+                session.inputNames[0];
+    
+            results = await session.run({
+                [inputName]: tensor
+            });
         }
-
-        const outputTensor = results.output0 || results.output || Object.values(results)[0];
-        const rawOutput = outputTensor.data;
-
-        const kpps = this.postProcessYOLOPose(rawOutput, inputSize);
-        return this.sort_by_lowest_x(kpps);
+    
+        const output =
+            results.output0 ||
+            Object.values(results)[0];
+    
+        return this.sort_by_lowest_x(
+            this.postProcessYOLOPose(
+                output.data,
+                ratio,
+                padX,
+                padY
+            )
+        );
     }
-
-    // Updated for 2 keypoints per group
-    postProcessYOLOPose(rawOutput, imgSize = 1600) {
-        console.log(`Total output values: ${rawOutput.length}`);
-
+    
+    postProcessYOLOPose(
+        rawOutput,
+        scale,
+        padX,
+        padY
+    ) {
+    
         const detections = [];
-        const confThreshold = 0.40;        // Higher to reduce false positives on placebo
-        const valuesPerDetection = 11;     // 4(bbox) + 1(obj) + 1(cls) + 2kpts*3 = 11
-        const kptStart = 6;                // After bbox + obj + cls
-        const numKeypoints = 2;            // ← This is what you trained for
-
-        const numDetections = Math.floor(rawOutput.length / valuesPerDetection);
-        console.log(`Raw detections: ${numDetections} | valuesPerDetection=${valuesPerDetection}`);
-
+    
+        const CONF_THRESHOLD = 0.40;
+    
+        // Your model is [1,300,12]
+        const VALUES_PER_DETECTION = 12;
+    
+        const numDetections =
+            Math.floor(
+                rawOutput.length /
+                VALUES_PER_DETECTION
+            );
+    
         for (let i = 0; i < numDetections; i++) {
-            const offset = i * valuesPerDetection;
-            const confidence = rawOutput[offset + 4];
-
-            if (confidence < confThreshold) continue;
-
-            const kpts = [];
-            
-            for (let k = 0; k < numKeypoints; k++) {
-                const base = kptStart + k * 3;
-                const x = rawOutput[offset + base] * imgSize;
-                const y = rawOutput[offset + base + 1] * imgSize;
-                const vis = rawOutput[offset + base + 2];
-
-                if (vis > 0.5 && x > 20 && y > 20 && x < imgSize - 20 && y < imgSize - 20) {
-                    kpts.push([x, y]);
-                }
+    
+            const o =
+                i * VALUES_PER_DETECTION;
+    
+            const conf =
+                rawOutput[o + 4];
+    
+            if (conf < CONF_THRESHOLD)
+                continue;
+    
+            const kp1conf =
+                rawOutput[o + 8];
+    
+            const kp2conf =
+                rawOutput[o + 11];
+    
+            if (kp1conf < 0.5 ||
+                kp2conf < 0.5)
+                continue;
+    
+            // ONNX outputs coordinates
+            // in LETTERBOX space
+    
+            let kp1x =
+                rawOutput[o + 6];
+    
+            let kp1y =
+                rawOutput[o + 7];
+    
+            let kp2x =
+                rawOutput[o + 9];
+    
+            let kp2y =
+                rawOutput[o + 10];
+    
+            // Undo letterbox
+            kp1x = (kp1x - padX) / scale;
+            kp1y = (kp1y - padY) / scale;
+    
+            kp2x = (kp2x - padX) / scale;
+            kp2y = (kp2y - padY) / scale;
+    
+            if (
+                !Number.isFinite(kp1x) ||
+                !Number.isFinite(kp1y) ||
+                !Number.isFinite(kp2x) ||
+                !Number.isFinite(kp2y)
+            ) {
+                continue;
             }
-
-            if (kpts.length >= 2) {
-                detections.push(kpts);
-            }
+    
+            detections.push([
+                [kp1x, kp1y],
+                [kp2x, kp2y]
+            ]);
         }
-
-        const clustered = this.clusterDetections(detections);
-        console.log(`✅ Final valid keypoint groups: ${clustered.length}`);
-        console.log("📍 Pose Keypoints Array:", JSON.stringify(clustered, null, 2));
-
+    
+        const clustered =
+            this.clusterDetections(
+                detections
+            );
+    
+        console.log(
+            `Found ${clustered.length} key groups`
+        );
+    
         return clustered;
     }
 
