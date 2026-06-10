@@ -11,6 +11,8 @@ export class KeypointManager {
         this.homography = [];
         this.source = [];
         this.scale_factor = 1;
+        this.scaled_width = 0;
+        this.scaled_height = 0;
     }
 
     async getKeypoints(videoElement, session) {
@@ -49,15 +51,11 @@ export class KeypointManager {
     }
 
     postProcessYOLOPose(rawOutput, imgSize = 1600) {
-        console.log(`Total output values: ${rawOutput.length}`);
-
         const detections = [];
         const confThreshold = 0.25;
-        const valuesPerDetection = 23; // 4(bbox) + 1(obj) + 1(cls) + 6kpts*3 = 23
+        const valuesPerDetection = 23;
 
         const numDetections = Math.floor(rawOutput.length / valuesPerDetection);
-
-        console.log(`Assuming ${numDetections} detections with ${valuesPerDetection} values each`);
 
         for (let i = 0; i < numDetections; i++) {
             const offset = i * valuesPerDetection;
@@ -66,9 +64,9 @@ export class KeypointManager {
             if (confidence < confThreshold) continue;
 
             const kpts = [];
-            const kptStart = 6; // after bbox(4) + obj(1) + cls(1)
+            const kptStart = 6;
 
-            for (let k = 0; k < 6; k++) {  // 6 keypoints
+            for (let k = 0; k < 6; k++) {
                 const base = kptStart + k * 3;
                 const x = rawOutput[offset + base] * imgSize;
                 const y = rawOutput[offset + base + 1] * imgSize;
@@ -85,7 +83,6 @@ export class KeypointManager {
         }
 
         const sorted = this.sortByLowestX(detections);
-        console.log(`✅ Found ${sorted.length} valid keypoint groups`);
         return sorted;
     }
 
@@ -133,5 +130,110 @@ export class KeypointManager {
 
         this.scale_factor = this.scale_dict[keys.length] || 1.0;
         console.log(`Homography computed for ${keys.length} key groups`);
+    }
+
+    // NEW: Matches Python transform_image exactly (using OpenCV.js)
+    transformImage(videoElement) {
+        if (this.keys.length < 2 || this.homography.length === 0) {
+            return null; // fallback
+        }
+
+        // Create temp canvas for input frame (full res)
+        const tempCanvas = document.createElement('canvas');
+        const tempCtx = tempCanvas.getContext('2d');
+        const srcW = videoElement.videoWidth || 1280;
+        const srcH = videoElement.videoHeight || 720;
+        tempCanvas.width = srcW;
+        tempCanvas.height = srcH;
+        tempCtx.drawImage(videoElement, 0, 0, srcW, srcH);
+
+        let srcMat = cv.imread(tempCanvas);
+
+        const imgList = [];
+
+        for (let i = 0; i < this.keys.length - 1; i++) {
+            const H = this.homography[i];
+            const srcPts = this.source[i];
+
+            // Warp full image
+            const warpedFull = new cv.Mat();
+            const dsizeFull = new cv.Size(srcW * 2, srcH * 2);
+            cv.warpPerspective(srcMat, warpedFull, H, dsizeFull, cv.INTER_LINEAR, cv.BORDER_CONSTANT, new cv.Scalar());
+
+            // Transform source points to find crop bounds
+            const srcPointsMat = srcPts.clone(); // already 4x1 CV_32FC2
+            const transformedMat = new cv.Mat();
+            cv.perspectiveTransform(srcPointsMat, transformedMat, H);
+
+            // Get min/max x for crop
+            let minX = Infinity, maxX = -Infinity;
+            const data = transformedMat.data32F;
+            for (let j = 0; j < data.length; j += 2) {
+                minX = Math.min(minX, data[j]);
+                maxX = Math.max(maxX, data[j]);
+            }
+
+            const xMin = Math.max(0, Math.floor(minX));
+            const xMax = Math.min(warpedFull.cols, Math.ceil(maxX));
+
+            // Crop
+            const rect = new cv.Rect(xMin, 0, xMax - xMin, warpedFull.rows);
+            const cropped = warpedFull.roi(rect);
+
+            // Resize height to target h (unify)
+            const resized = new cv.Mat();
+            cv.resize(cropped, resized, new cv.Size(cropped.cols, this.h), 0, 0, cv.INTER_LINEAR);
+
+            imgList.push(resized);
+
+            // Cleanup intermediates
+            warpedFull.delete();
+            transformedMat.delete();
+            cropped.delete();
+            srcPointsMat.delete();
+        }
+
+        // Combine horizontally
+        let combined = imgList[0];
+        for (let i = 1; i < imgList.length; i++) {
+            const newCombined = new cv.Mat();
+            cv.hconcat(combined, imgList[i], newCombined);
+            combined.delete();
+            combined = newCombined;
+            imgList[i].delete();
+        }
+
+        // Final resize with scale
+        const finalH = Math.round(combined.cols / this.scale_factor);
+        const finalResized = new cv.Mat();
+        cv.resize(combined, finalResized, new cv.Size(combined.cols, finalH), 0, 0, cv.INTER_CUBIC);
+
+        // Rotate 180
+        const rotated = new cv.Mat();
+        cv.rotate(finalResized, rotated, cv.ROTATE_180);
+
+        // Compute scaled dimensions (match Python screen logic - approximate)
+        const screenHeightApprox = window.innerHeight * 0.5; // rough
+        const scale = screenHeightApprox / rotated.rows;
+        this.scaled_width = Math.round(rotated.cols * scale);
+        this.scaled_height = Math.round(rotated.rows * scale);
+
+        const finalMat = new cv.Mat();
+        cv.resize(rotated, finalMat, new cv.Size(this.scaled_width, this.scaled_height));
+
+        // Convert back to canvas for drawing
+        const resultCanvas = document.createElement('canvas');
+        resultCanvas.width = this.scaled_width;
+        resultCanvas.height = this.scaled_height;
+        cv.imshow(resultCanvas, finalMat);
+
+        // Cleanup
+        srcMat.delete();
+        combined.delete();
+        finalResized.delete();
+        rotated.delete();
+        finalMat.delete();
+
+        return resultCanvas;
     }
 }
