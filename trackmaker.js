@@ -149,16 +149,18 @@ async function calibrate() {
     updateStatus('Detecting piano keys...');
     
     try {
-        const kps = await keypointManager.getKeypoints(video, session);
+        const kps = await keypointManager.get_kpps(video, session);
+        keypointManager.keys = kps;
+        
         if (kps && kps.length >= 2) {
-            keypointManager.computeHomography(kps);
+            keypointManager.compute_homography(kps, keypointManager.h);
             pianoManager.initKeys();
             isCalibrated = true;
             document.getElementById('btnMIDI').disabled = false;
             document.getElementById('btnStart').disabled = false;
             updateStatus(`✅ Calibrated with ${kps.length} key groups`);
         } else {
-            updateStatus('⚠️ Not enough keys. Try better lighting/angle.');
+            updateStatus('⚠️ Not enough keys detected. Try better lighting/angle.');
         }
     } catch (e) {
         console.error(e);
