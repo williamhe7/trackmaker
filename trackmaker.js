@@ -12,23 +12,19 @@ let isRunning = false;
 let started = false;
 let isCalibrated = false;
 
-// ← CHANGE THIS TO YOUR ACTUAL MODEL URL
-//const MODEL_URL = 'best_v3.onnx';   // Use full URL if needed, e.g.:
-const MODEL_URL = 'https://williamhe7.github.io/trackmaker/best_v3.onnx';
+const MODEL_URL = 'best_v3.onnx';   // Change to full GitHub Pages URL if needed
 
 async function initONNX() {
-    updateStatus('Loading AI model (~11MB)... This may take 15-40s on mobile');
+    updateStatus('Loading AI model (may take 15-40s on mobile)...');
     try {
         session = await ort.InferenceSession.create(MODEL_URL, {
-            executionProviders: ['wasm'],
-            graphOptimizationLevel: 'basic'
+            executionProviders: ['wasm']
         });
-        console.log('✅ Model loaded from URL');
-        updateStatus('✅ Model loaded successfully');
+        updateStatus('✅ Model loaded');
         return true;
     } catch (e) {
-        console.error('Model load failed:', e);
-        updateStatus('❌ Failed to load model. Check console.');
+        console.error('Model Error:', e);
+        updateStatus('❌ Model load failed');
         return false;
     }
 }
@@ -44,14 +40,12 @@ export async function initTrackmaker() {
     midiManager = new MidiManager(pianoManager, 180);
 
     setupUI();
-    if (modelLoaded) {
-        updateStatus('✅ Ready — Tap "Start Camera"');
-    }
+    if (modelLoaded) updateStatus('✅ Ready — Tap "Start Camera"');
 }
 
 function updateStatus(msg) {
-    const statusEl = document.getElementById('status');
-    if (statusEl) statusEl.textContent = msg;
+    const el = document.getElementById('status');
+    if (el) el.textContent = msg;
 }
 
 function setupUI() {
@@ -62,21 +56,15 @@ function setupUI() {
     document.getElementById('fullscreen-btn').onclick = toggleFullscreen;
 }
 
-async function startWebcam() {
+async function startWebcam() { /* ... same as previous ... */ 
+    // (keep the same code from last version)
     const btn = document.getElementById('btnWebcam');
     if (btn) btn.disabled = true;
-    
     try {
         updateStatus('Requesting Selfie Camera...');
-
         stream = await navigator.mediaDevices.getUserMedia({ 
-            video: { 
-                facingMode: { exact: "user" },
-                width: { ideal: 1280 },
-                height: { ideal: 720 }
-            } 
+            video: { facingMode: { exact: "user" }, width: { ideal: 1280 }, height: { ideal: 720 }}
         });
-
         video = document.createElement('video');
         video.srcObject = stream;
         video.playsInline = true;
@@ -88,50 +76,44 @@ async function startWebcam() {
 
         isRunning = true;
         document.getElementById('btnCalibrate').disabled = false;
-        updateStatus('✅ Selfie Camera Active — Point piano at camera and tap Recalibrate');
+        updateStatus('✅ Selfie Camera Active — Tap Recalibrate');
         loop();
     } catch (e) {
-        console.error('Camera Error:', e);
+        console.error(e);
         updateStatus('❌ Camera error: ' + e.message);
         if (btn) btn.disabled = false;
     }
 }
 
-// ... [rest of the file remains the same as previous version]
-
 function resizeCanvas() {
     if (!canvas) return;
     canvas.width = window.innerWidth;
-    const topBar = document.getElementById('top-bar');
-    const topHeight = topBar ? topBar.offsetHeight : 140;
+    const topHeight = document.getElementById('top-bar')?.offsetHeight || 140;
     canvas.height = window.innerHeight - topHeight - 10;
 }
 
-async function calibrate() {
-    if (!video || !session) {
-        updateStatus('Camera or model not ready');
-        return;
-    }
-    updateStatus('Detecting piano keys...');
-    
+async function calibrate() { /* keep previous */ 
+    if (!video || !session) return;
+    updateStatus('Detecting keys...');
     try {
         const kps = await keypointManager.getKeypoints(video, session);
-        if (kps && kps.length >= 2) {
+        if (kps?.length >= 2) {
             keypointManager.computeHomography(kps);
             pianoManager.initKeys();
             isCalibrated = true;
             document.getElementById('btnMIDI').disabled = false;
             document.getElementById('btnStart').disabled = false;
-            updateStatus(`✅ Calibrated with ${kps.length} key groups`);
+            updateStatus(`✅ Calibrated (${kps.length} groups)`);
         } else {
-            updateStatus('⚠️ Not enough keys. Try better lighting/angle.');
+            updateStatus('⚠️ Not enough keys detected');
         }
     } catch (e) {
         console.error(e);
-        updateStatus('Detection failed — check console');
+        updateStatus('Detection failed');
     }
 }
 
+// Keep selectMIDI, startPlayback from previous version
 function selectMIDI() {
     if (!isCalibrated) return;
     const input = document.createElement('input');
@@ -154,29 +136,29 @@ function startPlayback() {
 }
 
 function toggleFullscreen() {
-    const container = document.getElementById('canvas-container');
+    const doc = document.documentElement;
     if (!document.fullscreenElement) {
-        container.requestFullscreen().catch(() => {});
+        doc.requestFullscreen().catch(err => console.error(err));
     } else {
         document.exitFullscreen();
     }
 }
 
-document.addEventListener('fullscreenchange', () => setTimeout(resizeCanvas, 100));
+document.addEventListener('fullscreenchange', () => {
+    setTimeout(resizeCanvas, 200);
+});
 
-function loop() {
+function loop() { /* keep previous loop */ 
     if (!isRunning || !video) {
         requestAnimationFrame(loop);
         return;
     }
-
     ctx.save();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
     const vW = video.videoWidth || 1280;
     const vH = video.videoHeight || 720;
     const ratio = vW / vH;
-
     let drawW = canvas.width;
     let drawH = drawW / ratio;
     let offsetY = (canvas.height - drawH) / 2;
@@ -193,7 +175,6 @@ function loop() {
         midiManager.drawVisualization(ctx, canvas.height, currentTime - midiManager.startTime);
     }
     ctx.restore();
-
     requestAnimationFrame(loop);
 }
 
