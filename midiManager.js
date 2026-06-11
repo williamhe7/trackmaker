@@ -183,7 +183,7 @@ export class MidiManager {
         }
         console.log("found:", found, "missing:", missing);
 
-        const noteAreaH = canvasHeight * 0.6;
+        const noteAreaH = canvasHeight * 0.5;
         ctx.save();
 
         for (let note of this.notes) {
