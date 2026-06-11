@@ -36,7 +36,7 @@ async function initONNX() {
 
 export async function initTrackmaker() {
 
-    console.log("version 1.0")
+    console.log("version 1.1")
     
     canvas = document.getElementById('canvas');
     ctx = canvas.getContext('2d');
@@ -204,25 +204,13 @@ function selectMIDI() {
 
     input.onchange = async (e) => {
 
-        console.log("onchange fired");
-
         if (!e.target.files.length) {
             console.log("No file selected");
             return;
         }
 
-        console.log(
-            "selected:",
-            e.target.files[0].name
-        );
-
         await midiManager.loadMIDI(
             e.target.files[0]
-        );
-
-        console.log(
-            "notes:",
-            midiManager.notes.length
         );
 
         updateStatus("MIDI loaded");
