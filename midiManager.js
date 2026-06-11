@@ -58,12 +58,6 @@ export class MidiManager {
     drawVisualization(ctx, canvasHeight, currentTime) {
         if (this.startTime === null) return;
 
-        
-        console.log(
-            currentTime,
-            this.notes[0].start
-        );
-
         const noteAreaH = canvasHeight * 0.6;
         ctx.save();
 
