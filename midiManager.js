@@ -7,51 +7,279 @@ export class MidiManager {
         this.startTime = null;
     }
 
-    async loadMIDI(file) {
+     async loadMIDI(file) {
+    
         try {
+    
+            console.log("========== MIDI LOAD ==========");
+    
             const arrayBuffer = await file.arrayBuffer();
-            const midiData = MidiParser.parse(new Uint8Array(arrayBuffer));
-            
+    
+            console.log(
+                "file size:",
+                arrayBuffer.byteLength
+            );
+    
+            const midiData = MidiParser.parse(
+                new Uint8Array(arrayBuffer)
+            );
+    
+            console.log("MIDI DATA:");
+            console.log(midiData);
+    
+            console.log(
+                "timeDivision:",
+                midiData.timeDivision
+            );
+    
+            console.log(
+                "track count:",
+                midiData.track?.length
+            );
+    
+            if (
+                midiData.track &&
+                midiData.track.length > 0
+            ) {
+    
+                console.log(
+                    "first event:",
+                    midiData.track[0].event?.[0]
+                );
+    
+                console.log(
+                    "second event:",
+                    midiData.track[0].event?.[1]
+                );
+    
+                console.log(
+                    "third event:",
+                    midiData.track[0].event?.[2]
+                );
+            }
+    
             this.notes = [];
-            let currentTime = 0;
-            const tempo = 120; // default BPM, can be parsed from meta events if needed
-            const ticksPerBeat = midiData.timeDivision || 480;
-
-            for (let track of midiData.track) {
-                currentTime = 0;
-                let activeNotes = new Map(); // pitch -> start time
-
-                for (let event of track.event) {
-                    currentTime += event.deltaTime;
-
-                    if (event.type === 8 || (event.type === 9 && event.data[1] === 0)) { 
-                        // Note Off
-                        const pitch = event.data[0];
-                        if (activeNotes.has(pitch)) {
-                            const start = activeNotes.get(pitch);
-                            const duration = (currentTime - start) / ticksPerBeat * (tempo / 60);
+    
+            const tempo = 120;
+            const ticksPerBeat =
+                midiData.timeDivision || 480;
+    
+            const secondsPerBeat =
+                60 / tempo;
+    
+            let totalEvents = 0;
+            let noteOnCount = 0;
+            let noteOffCount = 0;
+    
+            for (
+                let trackIndex = 0;
+                trackIndex < midiData.track.length;
+                trackIndex++
+            ) {
+    
+                const track =
+                    midiData.track[trackIndex];
+    
+                console.log(
+                    `TRACK ${trackIndex}`
+                );
+    
+                let currentTicks = 0;
+    
+                const activeNotes =
+                    new Map();
+    
+                for (
+                    let eventIndex = 0;
+                    eventIndex < track.event.length;
+                    eventIndex++
+                ) {
+    
+                    const event =
+                        track.event[eventIndex];
+    
+                    totalEvents++;
+    
+                    currentTicks +=
+                        event.deltaTime || 0;
+    
+                    if (eventIndex < 10) {
+    
+                        console.log(
+                            `event ${eventIndex}:`,
+                            event
+                        );
+                    }
+    
+                    const type =
+                        event.type;
+    
+                    const data =
+                        event.data;
+    
+                    if (
+                        !Array.isArray(data)
+                    ) {
+                        continue;
+                    }
+    
+                    // Note On
+                    if (
+                        type === 9 &&
+                        data.length >= 2 &&
+                        data[1] > 0
+                    ) {
+    
+                        noteOnCount++;
+    
+                        const pitch =
+                            data[0];
+    
+                        activeNotes.set(
+                            pitch,
+                            currentTicks
+                        );
+                    }
+    
+                    // Note Off
+                    else if (
+                        type === 8 ||
+                        (
+                            type === 9 &&
+                            data.length >= 2 &&
+                            data[1] === 0
+                        )
+                    ) {
+    
+                        noteOffCount++;
+    
+                        const pitch =
+                            data[0];
+    
+                        if (
+                            activeNotes.has(
+                                pitch
+                            )
+                        ) {
+    
+                            const startTicks =
+                                activeNotes.get(
+                                    pitch
+                                );
+    
+                            const startSec =
+                                (
+                                    startTicks /
+                                    ticksPerBeat
+                                ) *
+                                secondsPerBeat;
+    
+                            const endSec =
+                                (
+                                    currentTicks /
+                                    ticksPerBeat
+                                ) *
+                                secondsPerBeat;
+    
                             this.notes.push({
-                                signature: pitch,
-                                start: start / ticksPerBeat * (tempo / 60),
-                                end: currentTime / ticksPerBeat * (tempo / 60),
-                                length: duration * this.avgSpeed * 1.2 // visual length scaling
+                                signature:
+                                    pitch,
+    
+                                start:
+                                    startSec,
+    
+                                end:
+                                    endSec,
+    
+                                length:
+                                    (
+                                        endSec -
+                                        startSec
+                                    ) *
+                                    this.avgSpeed
                             });
-                            activeNotes.delete(pitch);
+    
+                            activeNotes.delete(
+                                pitch
+                            );
                         }
-                    } else if (event.type === 9 && event.data[1] > 0) {
-                        // Note On
-                        const pitch = event.data[0];
-                        activeNotes.set(pitch, currentTime);
                     }
                 }
+    
+                console.log(
+                    "remaining active notes:",
+                    activeNotes.size
+                );
             }
-
-            // Sort notes by start time
-            this.notes.sort((a, b) => a.start - b.start);
-            console.log(`✅ Loaded ${this.notes.length} notes from MIDI`);
-            
+    
+            this.notes.sort(
+                (a, b) =>
+                    a.start - b.start
+            );
+    
+            console.log(
+                "========== MIDI SUMMARY =========="
+            );
+    
+            console.log(
+                "events:",
+                totalEvents
+            );
+    
+            console.log(
+                "note ons:",
+                noteOnCount
+            );
+    
+            console.log(
+                "note offs:",
+                noteOffCount
+            );
+    
+            console.log(
+                "notes created:",
+                this.notes.length
+            );
+    
+            if (
+                this.notes.length > 0
+            ) {
+    
+                console.log(
+                    "first note:",
+                    this.notes[0]
+                );
+    
+                console.log(
+                    "last note:",
+                    this.notes[
+                        this.notes.length - 1
+                    ]
+                );
+    
+                console.log(
+                    "pitch range:",
+                    Math.min(
+                        ...this.notes.map(
+                            n =>
+                                n.signature
+                        )
+                    ),
+                    Math.max(
+                        ...this.notes.map(
+                            n =>
+                                n.signature
+                        )
+                    )
+                );
+            }
+    
         } catch (e) {
-            console.error("MIDI parsing failed:", e);
+    
+            console.error(
+                "MIDI parsing failed:",
+                e
+            );
         }
     }
 
