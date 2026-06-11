@@ -197,15 +197,6 @@ function selectMIDI() {
         if (e.target.files[0]) {
             await midiManager.loadMIDI(e.target.files[0]);
 
-            console.log(
-                "notes:",
-                midiManager.notes.length
-            );
-    
-            console.log(
-                midiManager.notes.slice(0, 5)
-            );
-
             updateStatus('MIDI loaded');
         }
     };
@@ -214,16 +205,6 @@ function selectMIDI() {
 }
 
 function startPlayback() {
-
-    console.log(
-        "notes loaded:",
-        midiManager.notes.length
-    );
-
-    console.log(
-        "keys loaded:",
-        pianoManager.all_keys.length
-    );
     
     started = true;
     midiManager.startTime = performance.now() / 1000;
@@ -290,13 +271,6 @@ function loop() {
         }
 
         ctx.drawImage(video, (canvas.width - w) / 2, (canvas.height - h) / 2, w, h);
-    }
-    if (pianoManager) {
-        console.log(pianoManager.all_keys[0]);
-        console.log(
-            "keys:",
-            pianoManager.all_keys.length
-        );
     }
     if (started && midiManager?.notes?.length) {
         const t = performance.now() / 1000;
