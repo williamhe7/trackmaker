@@ -11,52 +11,11 @@ export class MidiManager {
     
         try {
     
-            console.log("========== MIDI LOAD ==========");
-    
             const arrayBuffer = await file.arrayBuffer();
-    
-            console.log(
-                "file size:",
-                arrayBuffer.byteLength
-            );
     
             const midiData = MidiParser.parse(
                 new Uint8Array(arrayBuffer)
             );
-    
-            console.log("MIDI DATA:");
-            console.log(midiData);
-    
-            console.log(
-                "timeDivision:",
-                midiData.timeDivision
-            );
-    
-            console.log(
-                "track count:",
-                midiData.track?.length
-            );
-    
-            if (
-                midiData.track &&
-                midiData.track.length > 0
-            ) {
-    
-                console.log(
-                    "first event:",
-                    midiData.track[0].event?.[0]
-                );
-    
-                console.log(
-                    "second event:",
-                    midiData.track[0].event?.[1]
-                );
-    
-                console.log(
-                    "third event:",
-                    midiData.track[0].event?.[2]
-                );
-            }
     
             this.notes = [];
     
@@ -80,10 +39,6 @@ export class MidiManager {
                 const track =
                     midiData.track[trackIndex];
     
-                console.log(
-                    `TRACK ${trackIndex}`
-                );
-    
                 let currentTicks = 0;
     
                 const activeNotes =
@@ -102,14 +57,6 @@ export class MidiManager {
     
                     currentTicks +=
                         event.deltaTime || 0;
-    
-                    if (eventIndex < 10) {
-    
-                        console.log(
-                            `event ${eventIndex}:`,
-                            event
-                        );
-                    }
     
                     const type =
                         event.type;
@@ -205,75 +152,12 @@ export class MidiManager {
                         }
                     }
                 }
-    
-                console.log(
-                    "remaining active notes:",
-                    activeNotes.size
-                );
             }
     
             this.notes.sort(
                 (a, b) =>
                     a.start - b.start
             );
-    
-            console.log(
-                "========== MIDI SUMMARY =========="
-            );
-    
-            console.log(
-                "events:",
-                totalEvents
-            );
-    
-            console.log(
-                "note ons:",
-                noteOnCount
-            );
-    
-            console.log(
-                "note offs:",
-                noteOffCount
-            );
-    
-            console.log(
-                "notes created:",
-                this.notes.length
-            );
-    
-            if (
-                this.notes.length > 0
-            ) {
-    
-                console.log(
-                    "first note:",
-                    this.notes[0]
-                );
-    
-                console.log(
-                    "last note:",
-                    this.notes[
-                        this.notes.length - 1
-                    ]
-                );
-    
-                console.log(
-                    "pitch range:",
-                    Math.min(
-                        ...this.notes.map(
-                            n =>
-                                n.signature
-                        )
-                    ),
-                    Math.max(
-                        ...this.notes.map(
-                            n =>
-                                n.signature
-                        )
-                    )
-                );
-            }
-    
         } catch (e) {
     
             console.error(
