@@ -197,6 +197,12 @@ function selectMIDI() {
         if (e.target.files[0]) {
             await midiManager.loadMIDI(e.target.files[0]);
 
+            console.log("notes:", midiManager.notes.length);
+
+            if (midiManager.notes.length > 0) {
+                console.log(midiManager.notes[0]);
+            }
+
             updateStatus('MIDI loaded');
         }
     };
@@ -205,6 +211,12 @@ function selectMIDI() {
 }
 
 function startPlayback() {
+
+    console.log(
+        "started",
+        started,
+        midiManager.startTime
+    );
     
     started = true;
     midiManager.startTime = performance.now() / 1000;
