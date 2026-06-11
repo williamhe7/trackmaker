@@ -58,6 +58,19 @@ export class MidiManager {
     drawVisualization(ctx, canvasHeight, currentTime) {
         if (this.startTime === null) return;
 
+        let found = 0;
+        let missing = 0;
+        for (const note of this.notes.slice(0, 100)) {
+        
+            const key = this.pianoManager.all_keys.find(
+                k => k.signature === note.signature
+            );
+        
+            if (key) found++;
+            else missing++;
+        }
+        console.log("found:", found, "missing:", missing);
+
         const noteAreaH = canvasHeight * 0.6;
         ctx.save();
 
