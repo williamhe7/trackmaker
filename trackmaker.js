@@ -36,7 +36,7 @@ async function initONNX() {
 
 export async function initTrackmaker() {
 
-    console.log("version 1.21")
+    console.log("version 1.3")
     
     canvas = document.getElementById('canvas');
     ctx = canvas.getContext('2d');
@@ -280,18 +280,27 @@ function loop() {
     }
 
     if (pianoCanvas) {
-        const scale = Math.min(
-            canvas.width / pianoCanvas.width,
-            canvas.height / pianoCanvas.height
-        ) * 1.1;
-
-        const w = pianoCanvas.width * scale;
-        const h = pianoCanvas.height * scale;
-
+    
+        const scaleX =
+            canvas.width / pianoCanvas.width;
+    
+        const scaleY =
+            (canvas.height * 0.5) /
+            pianoCanvas.height;
+    
+        const scale =
+            Math.min(scaleX, scaleY);
+    
+        const w =
+            pianoCanvas.width * scale;
+    
+        const h =
+            pianoCanvas.height * scale;
+    
         ctx.drawImage(
             pianoCanvas,
             (canvas.width - w) / 2,
-            canvas.height - h,
+            canvas.height * 0.5,
             w,
             h
         );
