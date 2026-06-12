@@ -79,77 +79,69 @@ export class PianoManager {
     ========================== */
 
     spawnMiddleCUI() {
-
         if (!this.overlay) {
-            console.error(
-                "key-overlay not found"
-            );
+            console.error("key-overlay not found");
             return;
         }
 
         this.overlay.innerHTML = "";
         this.overlay.style.display = "block";
 
-        const numKeys =
-            this.wkeys.length;
+        const km = this.keypointManager;
+        const numKeys = this.wkeys.length;
+
+        // Get the actual drawn piano area on screen
+        const canvas = document.getElementById('canvas');
+        if (!canvas) return;
+
+        const keyWidthScreen = (km.scaled_width / numKeys) * this.getScaleFactor();
+        const pianoLeft = this.getPianoLeftOffset();
 
         for (let i = 0; i < numKeys; i++) {
-
-            const btn =
-                document.createElement("button");
-
+            const btn = document.createElement("button");
             btn.textContent = i;
+            btn.className = "piano-key-btn";
 
-            btn.style.position =
-                "absolute";
+            // Position exactly over the white key
+            const left = pianoLeft + (i * keyWidthScreen);
+            const width = keyWidthScreen;
 
-            btn.style.left =
-                `${100 * i / numKeys}%`;
+            btn.style.left = `${left}px`;
+            btn.style.width = `${width}px`;
+            btn.style.bottom = "0px";           // align with bottom of piano area
+            btn.style.height = "35%";           // cover lower part of keys
 
-            btn.style.width =
-                `${100 / numKeys}%`;
-
-            btn.style.bottom =
-                "0px";
-
-            btn.style.height =
-                "40%";
-
-            btn.style.zIndex =
-                "9999";
-
-            btn.style.background =
-                "rgba(255,255,255,0.25)";
-
-            btn.style.color =
-                "white";
-
-            btn.style.border =
-                "1px solid rgba(255,255,255,0.3)";
-
-            btn.style.pointerEvents =
-                "auto";
-
-            btn.style.touchAction =
-                "manipulation";
-
-            btn.addEventListener(
-                "pointerdown",
-                (e) => {
-
-                    e.preventDefault();
-
-                    console.log(
-                        "Selected middle C:",
-                        i
-                    );
-
-                    this.setMiddleC(i);
-                }
-            );
+            btn.addEventListener("pointerdown", (e) => {
+                e.preventDefault();
+                console.log("Selected middle C:", i);
+                this.setMiddleC(i);
+            });
 
             this.overlay.appendChild(btn);
         }
+    }
+
+    /* Helper methods */
+    getScaleFactor() {
+        const canvas = document.getElementById('canvas');
+        if (!canvas || !this.keypointManager.scaled_width) return 1;
+
+        const pianoCanvasWidth = this.keypointManager.scaled_width;
+        const scaleX = canvas.width / pianoCanvasWidth;
+        const scaleY = (canvas.height * 0.5) / this.keypointManager.scaled_height;
+
+        return Math.min(scaleX, scaleY);
+    }
+
+    getPianoLeftOffset() {
+        const canvas = document.getElementById('canvas');
+        if (!canvas) return 0;
+
+        const km = this.keypointManager;
+        const scale = this.getScaleFactor();
+        const w = km.scaled_width * scale;
+
+        return (canvas.width - w) / 2;   // centering offset
     }
 
     /* ==========================
