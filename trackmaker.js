@@ -202,9 +202,12 @@ function buildKeyOverlay() {
 
     const container = document.getElementById("key-overlay");
     container.innerHTML = "";
-    container.style.display = "block";
 
     const keys = pianoManager.all_keys;
+
+    // count ONLY white keys for proper spacing
+    const whiteKeys = keys.filter(k => !k.isBlack);
+    const whiteKeyWidth = canvas.width / whiteKeys.length;
 
     for (const key of keys) {
 
@@ -213,31 +216,48 @@ function buildKeyOverlay() {
         btn.textContent = key.name;
 
         btn.style.position = "absolute";
-        btn.style.left = `${key.x}px`;
-        btn.style.top = `${canvas.height * 0.6}px`;
-        btn.style.width = `${key.width}px`;
-        btn.style.height = `80px`;
 
-        btn.style.opacity = "0.35";
+        // convert piano-space index → white-key space
+        const whiteIndex = whiteKeys.findIndex(k => k === key);
+
+        let x;
+
+        if (!key.isBlack) {
+            x = whiteIndex * whiteKeyWidth;
+        } else {
+            // black keys sit between whites → approximate center
+            const prevWhiteIndex = whiteKeys.findIndex(
+                (_, i) => whiteKeys[i + 1]?.x > key.x
+            );
+
+            x = (prevWhiteIndex + 0.65) * whiteKeyWidth;
+        }
+
+        btn.style.left = `${x}px`;
+
+        // IMPORTANT: piano is bottom half
+        btn.style.bottom = `0px`;
+
+        btn.style.width = key.isBlack
+            ? `${whiteKeyWidth * 0.6}px`
+            : `${whiteKeyWidth}px`;
+
+        btn.style.height = key.isBlack ? `140px` : `220px`;
+
+        btn.style.opacity = "0.4";
         btn.style.fontSize = "10px";
-
-        btn.style.background = key.isBlack ? "#222" : "#ddd";
-        btn.style.color = key.isBlack ? "#fff" : "#000";
         btn.style.border = "1px solid #444";
+
+        btn.style.background = key.isBlack ? "#111" : "#ddd";
+        btn.style.color = key.isBlack ? "#fff" : "#000";
 
         btn.onclick = () => {
 
-            pianoManager.setMiddleC(key.signature);
+            console.log("Selected middle C reference:", key.signature);
+
+            pianoManager.setMiddleC?.(key.signature);
 
             container.innerHTML = "";
-            container.style.display = "none";
-
-            isMidiEnabled = true;
-
-            document.getElementById('btnMIDI').disabled = false;
-            document.getElementById('btnStart').disabled = false;
-
-            updateStatus("Ready (Middle C set)");
         };
 
         container.appendChild(btn);
