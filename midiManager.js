@@ -270,22 +270,14 @@ export class MidiManager {
     }
 
     drawVisualization(ctx, canvasHeight, currentTime) {
-        if (this.startTime === null) return;
+        if (this.startTime === null || !this.pianoManager) return;
 
-        let found = 0;
-        let missing = 0;
-        for (const note of this.notes.slice(0, 100)) {
-        
-            const key = this.pianoManager.all_keys.find(
-                k => k.signature === note.signature
-            );
-        
-            if (key) found++;
-            else missing++;
-        }
-        console.log("found:", found, "missing:", missing);
+        const km = this.pianoManager.keypointManager;
+        const drawInfo = km.lastDrawInfo || { drawX: 0, scale: 1, pianoW: km.scaled_width };
 
+        const noteAreaTop = canvasHeight * 0.5;
         const noteAreaH = canvasHeight * 0.5;
+
         ctx.save();
 
         for (let note of this.notes) {
@@ -297,17 +289,21 @@ export class MidiManager {
             const key = this.pianoManager.all_keys.find(k => k.signature === note.signature);
             if (!key) continue;
 
+            // Map internal key coordinates to screen coordinates
+            const screenX = drawInfo.drawX + (key.x / drawInfo.pianoW) * (drawInfo.pianoW * drawInfo.scale);
+            const screenWidth = (key.width / drawInfo.pianoW) * (drawInfo.pianoW * drawInfo.scale);
+
             const clampedTop = Math.max(0, yTop);
             const clampedBottom = Math.min(noteAreaH, yHead);
 
             // Falling note
             ctx.fillStyle = key.isBlack ? 'rgba(220, 50, 50, 0.95)' : 'rgba(255, 80, 80, 0.9)';
-            ctx.fillRect(key.x, clampedTop, key.width, clampedBottom - clampedTop);
+            ctx.fillRect(screenX, noteAreaTop + clampedTop, screenWidth, clampedBottom - clampedTop);
 
             // Border
             ctx.strokeStyle = '#ffffff';
             ctx.lineWidth = 2;
-            ctx.strokeRect(key.x, clampedTop, key.width, clampedBottom - clampedTop);
+            ctx.strokeRect(screenX, noteAreaTop + clampedTop, screenWidth, clampedBottom - clampedTop);
         }
 
         ctx.restore();
