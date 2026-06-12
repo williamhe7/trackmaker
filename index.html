@@ -27,7 +27,6 @@
         font-family: Arial, sans-serif;
     }
 
-    /* FULLSCREEN AR STAGE */
     #canvas-container {
         position: fixed;
         inset: 0;
@@ -45,19 +44,42 @@
         object-fit: cover;
     }
 
-    /* OVERLAY UI */
-   #top-bar {
-       position: fixed;
-       top: 0;
-       left: 0;
-       right: 0;
-       z-index: 500;
-   
-       background: rgba(0,0,0,0);
-       backdrop-filter: none;
-   
-       padding: 6px;
-   }
+    /* NEW: KEY SELECTION OVERLAY */
+    #key-overlay {
+        position: absolute;
+        inset: 0;
+        z-index: 400;
+        display: none;
+        pointer-events: none;
+    }
+
+    .piano-key-btn {
+        position: absolute;
+        bottom: 0;
+        height: 35%;
+        border: 1px solid rgba(255,255,255,0.15);
+        background: rgba(255,255,255,0.08);
+        color: white;
+        font-size: 10px;
+        pointer-events: auto;
+        user-select: none;
+    }
+
+    .piano-key-btn.black {
+        background: rgba(0,0,0,0.6);
+        height: 22%;
+        z-index: 2;
+    }
+
+    #top-bar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 500;
+        background: transparent;
+        padding: 6px;
+    }
 
     #header {
         text-align: center;
@@ -112,15 +134,6 @@
         border-radius: 6px;
         border: none;
     }
-
-    /* LANDSCAPE OPTIMIZATION */
-    @media (orientation: portrait) {
-        #header::after {
-            content: " (Rotate device for best experience)";
-            font-size: 12px;
-            opacity: 0.7;
-        }
-    }
 </style>
 </head>
 
@@ -128,6 +141,9 @@
 
 <div id="canvas-container">
     <canvas id="canvas"></canvas>
+
+    <!-- NEW OVERLAY -->
+    <div id="key-overlay"></div>
 
     <div id="top-bar">
         <div id="header">Piano Trackmaker</div>
