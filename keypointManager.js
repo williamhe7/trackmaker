@@ -24,6 +24,8 @@ export class KeypointManager {
         // optional FPS optimization
         this._cachedWarp = null;
         this._lastKeyHash = null;
+
+        this.lastDrawInfo = null;
     }
 
     // ----------------------------
@@ -360,6 +362,11 @@ export class KeypointManager {
             transformed.delete();
             warped.delete();
             src.delete();
+
+            this.lastDrawInfo = {
+                pianoW: rotated.cols,
+                pianoH: rotated.rows
+            };
     
             return outputCanvas;
     
