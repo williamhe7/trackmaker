@@ -207,6 +207,8 @@ async function calibrate() {
 
     pianoManager.initKeys();
 
+    buildKeyOverlay();
+
     isCalibrated = true;
 
     document.getElementById('btnMIDI').disabled = false;
@@ -246,6 +248,46 @@ function selectMIDI() {
 
     input.click();
 }
+
+function buildKeyOverlay() {
+
+    const container = document.getElementById("key-overlay");
+    container.innerHTML = "";
+
+    const keys = pianoManager.all_keys;
+
+    for (const key of keys) {
+
+        const btn = document.createElement("button");
+
+        btn.textContent = key.name;
+
+        btn.style.position = "absolute";
+        btn.style.left = `${key.x}px`;
+        btn.style.top = `${canvas.height * 0.6}px`; // match piano area
+        btn.style.width = `${key.width}px`;
+        btn.style.height = `80px`;
+
+        btn.style.opacity = "0.4";
+        btn.style.fontSize = "10px";
+
+        btn.style.pointerEvents = "auto";
+        btn.style.background = key.isBlack ? "#222" : "#ddd";
+        btn.style.color = key.isBlack ? "#fff" : "#000";
+        btn.style.border = "1px solid #444";
+
+        btn.onclick = () => {
+            console.log("Calibrating on key:", key.signature);
+
+            pianoManager.setMiddleC(key.signature);
+
+            container.innerHTML = ""; // remove overlay after calibration
+        };
+
+        container.appendChild(btn);
+    }
+}
+
 
 function startPlayback() {
     
