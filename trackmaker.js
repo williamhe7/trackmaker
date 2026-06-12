@@ -36,7 +36,7 @@ async function initONNX() {
 
 export async function initTrackmaker() {
 
-    console.log("version 1.3")
+    console.log("version 1.31")
     
     canvas = document.getElementById('canvas');
     ctx = canvas.getContext('2d');
