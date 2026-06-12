@@ -184,22 +184,29 @@ async function calibrate() {
 
 function selectMIDI() {
 
-    if (!isCalibrated || !pianoManager?.isCalibrated) {
-        updateStatus("Select Middle C first");
-        return;
-    }
+    console.log("Select MIDI clicked");
 
     const input = document.createElement("input");
+
     input.type = "file";
     input.accept = ".mid,.midi";
 
+    document.body.appendChild(input);
+
     input.onchange = async (e) => {
 
-        if (!e.target.files.length) return;
+        if (!e.target.files.length) {
+            console.log("No file selected");
+            return;
+        }
 
-        await midiManager.loadMIDI(e.target.files[0]);
+        await midiManager.loadMIDI(
+            e.target.files[0]
+        );
 
         updateStatus("MIDI loaded");
+
+        document.body.removeChild(input);
     };
 
     input.click();
