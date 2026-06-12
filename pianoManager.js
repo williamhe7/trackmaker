@@ -158,23 +158,27 @@ export class PianoManager {
 
     setMiddleC(index) {
 
-        console.log(
-            "Middle C index =",
-            index
-        );
+        console.log("Middle C index =", index);
 
         this.middleCIndex = index;
-
         this.assignSignatures();
-
         this.initBKeys();
-
         this.isCalibrated = true;
 
         if (this.overlay) {
             this.overlay.innerHTML = "";
             this.overlay.style.display = "none";
         }
+
+        // === FIX: Enable the remaining buttons ===
+        const btnMIDI = document.getElementById('btnMIDI');
+        const btnStart = document.getElementById('btnStart');
+        if (btnMIDI) btnMIDI.disabled = false;
+        if (btnStart) btnStart.disabled = false;
+
+        // Optional: better status
+        const statusEl = document.getElementById('status');
+        if (statusEl) statusEl.textContent = "Ready — Select MIDI to load a file";
     }
 
     /* ==========================
