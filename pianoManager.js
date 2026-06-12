@@ -79,69 +79,48 @@ export class PianoManager {
     ========================== */
 
     spawnMiddleCUI() {
-        if (!this.overlay) {
-            console.error("key-overlay not found");
-            return;
-        }
+        if (!this.overlay) return;
 
         this.overlay.innerHTML = "";
         this.overlay.style.display = "block";
 
         const km = this.keypointManager;
         const numKeys = this.wkeys.length;
-
-        // Get the actual drawn piano area on screen
         const canvas = document.getElementById('canvas');
-        if (!canvas) return;
 
-        const keyWidthScreen = (km.scaled_width / numKeys) * this.getScaleFactor();
-        const pianoLeft = this.getPianoLeftOffset();
+        // Calculate the exact position and scale where the piano is drawn
+        const pianoW = km.scaled_width;
+        const pianoH = km.scaled_height;
+
+        const scaleX = canvas.width / pianoW;
+        const scaleY = (canvas.height * 0.5) / pianoH;
+        const scale = Math.min(scaleX, scaleY);
+
+        const drawnWidth = pianoW * scale;
+        const drawnHeight = pianoH * scale;
+
+        const leftOffset = (canvas.width - drawnWidth) / 2;
+        const topOffset = canvas.height * 0.5;   // piano starts at 50% height
+
+        const keyWidth = drawnWidth / numKeys;
 
         for (let i = 0; i < numKeys; i++) {
             const btn = document.createElement("button");
-            btn.textContent = i;
+            btn.textContent = i.toString();
             btn.className = "piano-key-btn";
 
-            // Position exactly over the white key
-            const left = pianoLeft + (i * keyWidthScreen);
-            const width = keyWidthScreen;
-
-            btn.style.left = `${left}px`;
-            btn.style.width = `${width}px`;
-            btn.style.bottom = "0px";           // align with bottom of piano area
-            btn.style.height = "35%";           // cover lower part of keys
+            btn.style.left = `${leftOffset + i * keyWidth}px`;
+            btn.style.width = `${keyWidth}px`;
+            btn.style.top = `${topOffset}px`;
+            btn.style.height = `${drawnHeight * 0.6}px`;   // cover most of the key height
 
             btn.addEventListener("pointerdown", (e) => {
                 e.preventDefault();
-                console.log("Selected middle C:", i);
                 this.setMiddleC(i);
             });
 
             this.overlay.appendChild(btn);
         }
-    }
-
-    /* Helper methods */
-    getScaleFactor() {
-        const canvas = document.getElementById('canvas');
-        if (!canvas || !this.keypointManager.scaled_width) return 1;
-
-        const pianoCanvasWidth = this.keypointManager.scaled_width;
-        const scaleX = canvas.width / pianoCanvasWidth;
-        const scaleY = (canvas.height * 0.5) / this.keypointManager.scaled_height;
-
-        return Math.min(scaleX, scaleY);
-    }
-
-    getPianoLeftOffset() {
-        const canvas = document.getElementById('canvas');
-        if (!canvas) return 0;
-
-        const km = this.keypointManager;
-        const scale = this.getScaleFactor();
-        const w = km.scaled_width * scale;
-
-        return (canvas.width - w) / 2;   // centering offset
     }
 
     /* ==========================
